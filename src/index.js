@@ -54,7 +54,7 @@ export function apply(ctx, config) {
   const models = createModels({ credentials: store })
   models.setProvider(catalogProvider)
 
-  ctx.llm.registerAdapter([provider], new CodexAdapter(models, providerId, { streamIdleTimeoutMs }))
+  ctx.llm.registerAdapter([provider], new CodexAdapter(models, providerId, provider, { streamIdleTimeoutMs }))
 
   const login = new LoginManager(ctx, models, providerId)
   installServerRoutes(ctx, login, store, providerId)

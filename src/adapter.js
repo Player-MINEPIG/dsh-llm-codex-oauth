@@ -74,12 +74,16 @@ function piContext(options, messages) {
 // ── replay metadata ─────────────────────────────────────────────────────────
 
 /** Durable pi-ai replay metadata for one assistant message. */
-function toPiReplayState(message) {
+function toPiReplayState(message, providerRoute) {
   return {
     kind: 'codex-oauth',
     version: 1,
     api: message.api,
-    provider: message.provider,
+    // The harness source records the dsh route (e.g. "codex-oauth"), while
+    // pi-ai's message.provider is the catalog id ("openai-codex"). Store the
+    // route here so readReplayState's source check matches; the reconstructed
+    // message re-derives the catalog id from the adapter.
+    provider: providerRoute,
     model: message.model,
     ...(message.responseModel === undefined ? {} : { responseModel: message.responseModel }),
     ...(message.responseId === undefined ? {} : { responseId: message.responseId }),
@@ -166,7 +170,7 @@ function foreignAssistant(message) {
 }
 
 /** Recombine durable harness content with validated replay metadata. */
-function replayedAssistant(message, source, rawState) {
+function replayedAssistant(message, source, rawState, providerId) {
   const state = readReplayState(rawState)
   if (state.provider !== source.provider) return invalidReplay('provider does not match assistant source')
   if (state.model !== source.model) return invalidReplay('model does not match assistant source')
@@ -203,7 +207,7 @@ function replayedAssistant(message, source, rawState) {
       }
     }),
     api: state.api,
-    provider: state.provider,
+    provider: providerId,
     model: state.model,
     ...(state.responseModel === undefined ? {} : { responseModel: state.responseModel }),
     ...(state.responseId === undefined ? {} : { responseId: state.responseId }),
@@ -214,15 +218,15 @@ function replayedAssistant(message, source, rawState) {
 }
 
 /** Convert one durable harness assistant message into pi-ai history. */
-function toPiAssistant(message) {
+function toPiAssistant(message, providerId) {
   const source = message.source
   return source.kind !== 'model' || source.replayState === undefined
     ? foreignAssistant(message)
-    : replayedAssistant(message, source, source.replayState)
+    : replayedAssistant(message, source, source.replayState, providerId)
 }
 
 /** Text-only harness history conversion (image input is refused for now). */
-function textOnlyContext(options) {
+function textOnlyContext(options, providerId) {
   const toolNames = new Map()
   const messages = []
   for (const message of options.messages) {
@@ -232,7 +236,7 @@ function textOnlyContext(options) {
       continue
     }
     if (message.role === 'assistant') {
-      const assistant = toPiAssistant(message)
+      const assistant = toPiAssistant(message, providerId)
       for (const block of assistant.content) if (block.type === 'toolCall') toolNames.set(CallId(block.id), block.name)
       messages.push(assistant)
       continue
@@ -322,7 +326,7 @@ function mapStopReason(message, contextWindow) {
  * `finish` chunks. Throws STREAM_CLOSED if the source ends without a terminal
  * event.
  */
-async function* toStreamChunks(events, contextWindow) {
+async function* toStreamChunks(events, contextWindow, providerRoute) {
   const toolIds = new Map()
   for await (const event of events) {
     switch (event.type) {
@@ -374,7 +378,7 @@ async function* toStreamChunks(events, contextWindow) {
         break
       case 'done':
         yield { type: 'usage', usage: mapUsage(event.message.usage) }
-        yield { type: 'finish', reason: mapStopReason(event.message, contextWindow), replayState: toPiReplayState(event.message) }
+        yield { type: 'finish', reason: mapStopReason(event.message, contextWindow), replayState: toPiReplayState(event.message, providerRoute) }
         return
       case 'error':
         yield { type: 'usage', usage: mapUsage(event.error.usage) }
@@ -454,17 +458,20 @@ function reasoningInfo(model) {
 export class CodexAdapter extends LlmAdapter {
   #models
   #providerId
+  #provider
   #streamIdleTimeoutMs
 
   /**
    * @param models - pi-ai Models collection carrying the codex provider and the DshCredentialStore.
    * @param providerId - pi-ai catalog provider id (openai-codex).
+   * @param provider - dsh provider route (codex-oauth), recorded in replay state.
    * @param options.streamIdleTimeoutMs - per-chunk idle timeout.
    */
-  constructor(models, providerId, { streamIdleTimeoutMs = DEFAULT_STREAM_IDLE_TIMEOUT_MS } = {}) {
+  constructor(models, providerId, provider, { streamIdleTimeoutMs = DEFAULT_STREAM_IDLE_TIMEOUT_MS } = {}) {
     super()
     this.#models = models
     this.#providerId = providerId
+    this.#provider = provider
     this.#streamIdleTimeoutMs = streamIdleTimeoutMs
   }
 
@@ -507,7 +514,7 @@ export class CodexAdapter extends LlmAdapter {
     const upstream = options.signal === undefined ? consumer.signal : AbortSignal.any([options.signal, consumer.signal])
     const watchdog = idleWatchdog(upstream, this.#streamIdleTimeoutMs)
     try {
-      const context = textOnlyContext(options)
+      const context = textOnlyContext(options, this.#providerId)
       const iterator = toStreamChunks(
         this.#models.streamSimple(model, context, {
           ...(reasoning === undefined ? {} : { reasoning }),
@@ -518,6 +525,7 @@ export class CodexAdapter extends LlmAdapter {
           headers: attributionHeaders(),
         }),
         model.contextWindow,
+        this.#provider,
       )[Symbol.asyncIterator]()
       let exhausted = false
       try {

@@ -29,7 +29,7 @@ function makeAdapter(eventsFactory) {
       return eventsFactory()
     },
   }
-  const adapter = new CodexAdapter(models, 'openai-codex', { streamIdleTimeoutMs: 5000 })
+  const adapter = new CodexAdapter(models, 'openai-codex', 'codex-oauth', { streamIdleTimeoutMs: 5000 })
   return { adapter, getCaptured: () => captured }
 }
 
@@ -90,6 +90,7 @@ async function* happyEvents() {
   check('T1 finish stop', finish.type === 'finish' && finish.reason.kind === 'stop')
   const replay = finish.replayState
   check('T1 replay kind', replay?.kind === 'codex-oauth' && replay?.version === 1 && replay?.api === 'openai-codex-responses' && replay?.responseId === 'resp_1')
+  check('T1 replay provider is the route', replay?.provider === 'codex-oauth', String(replay?.provider))
   check('T1 replay signatures', replay?.blocks?.[0]?.type === 'reasoning' && replay?.blocks?.[0]?.thinkingSignature === 'sig-t' && replay?.blocks?.[1]?.textSignature === 'sig-x' && replay?.blocks?.[2]?.thoughtSignature === 'sig-c')
 }
 
@@ -162,10 +163,10 @@ async function* tinyEvents() {
   const assistantMessage = {
     role: 'assistant',
     source: {
-      kind: 'model', provider: 'openai-codex', model: model.id,
+      kind: 'model', provider: 'codex-oauth', model: model.id,
       replayState: {
         kind: 'codex-oauth', version: 1, api: 'openai-codex-responses',
-        provider: 'openai-codex', model: model.id, responseId: 'resp_2',
+        provider: 'codex-oauth', model: model.id, responseId: 'resp_2',
         stopReason: 'stop', blocks: [{ type: 'text', textSignature: 'sig-prev' }],
       },
     },
@@ -216,6 +217,36 @@ async function* tinyEvents() {
     refused = error instanceof LlmError && error.failure?.code === 'UNSUPPORTED_REASONING_EFFORT'
   }
   check('T7 unknown reasoning effort refused', refused)
+}
+
+// ── T8: provider mismatch in replay state is rejected (regression) ──────────
+{
+  const { adapter } = makeAdapter(tinyEvents)
+  let rejected = false
+  try {
+    await collect(adapter, {
+      provider: 'codex-oauth', model: model.id,
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'first' }] },
+        {
+          role: 'assistant',
+          source: {
+            kind: 'model', provider: 'codex-oauth', model: model.id,
+            replayState: {
+              kind: 'codex-oauth', version: 1, api: 'openai-codex-responses',
+              provider: 'openai-codex', model: model.id, stopReason: 'stop',
+              blocks: [{ type: 'text', textSignature: 'sig' }],
+            },
+          },
+          content: [{ type: 'text', text: 'earlier' }],
+        },
+        { role: 'user', content: [{ type: 'text', text: 'again' }] },
+      ],
+    })
+  } catch (error) {
+    rejected = error instanceof LlmError && error.failure?.code === 'INVALID_REPLAY_STATE'
+  }
+  check('T8 provider mismatch rejects with INVALID_REPLAY_STATE', rejected)
 }
 
 if (failed > 0) {
