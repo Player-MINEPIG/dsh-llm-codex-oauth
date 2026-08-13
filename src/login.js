@@ -22,6 +22,7 @@ export class LoginManager {
   #controller = undefined
   #state = undefined
   #waiters = []
+  #listeners = []
 
   constructor(ctx, models, providerId) {
     this.#ctx = ctx
@@ -39,6 +40,24 @@ export class LoginManager {
   #setState(state) {
     this.#state = state
     for (const resolve of this.#waiters.splice(0)) resolve(state)
+    for (const listener of [...this.#listeners]) {
+      try {
+        listener(state)
+      } catch {}
+    }
+  }
+
+  /**
+   * Subscribe to state transitions. The callback fires immediately with the
+   * current state and then on every change; returns the unsubscribe function.
+   */
+  onState(callback) {
+    this.#listeners.push(callback)
+    callback(this.#state)
+    return () => {
+      const index = this.#listeners.indexOf(callback)
+      if (index >= 0) this.#listeners.splice(index, 1)
+    }
   }
 
   /**

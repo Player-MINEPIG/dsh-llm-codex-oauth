@@ -1,54 +1,15 @@
 /**
- * /codex-login, /codex-status, /codex-logout command handlers.
+ * Conversation-side read-only helpers: /codex-status and /codex-logout.
  *
- * Commands run on the host plane (the dsh base composition mounts the command
- * registry) and their results render directly in the conversation UI — they
- * never enter model history. No handler ever prints a token: only the
- * verification URL, the device code, the account id, and expiry times.
+ * Login itself lives in the settings page (see settings.js) — users do not
+ * register from the conversation. These two commands stay as conveniences:
+ * both are read-only against the credential store (logout only deletes the
+ * stored credential; it never starts a flow). No handler ever prints a token.
  *
  * @module dsh-llm-codex-oauth/commands
  */
 
-function minutesText(seconds) {
-  return `${Math.max(1, Math.round(seconds / 60))} 分钟`
-}
-
 export function installCommands(ctx, login, store, providerId) {
-  ctx.commands.register({
-    name: 'codex-login',
-    description: '用 ChatGPT 账号登录（设备码），启用 Codex 订阅模型',
-    // Declaring an input descriptor makes the slash-menu pick claim the token
-    // into the composer ("/codex-login ") instead of executing immediately:
-    // select → token pasted into the input → Enter executes.
-    input: { hint: '直接按回车开始登录（无需参数）' },
-    async handler() {
-      const existing = await store.read(providerId)
-      if (existing !== undefined) {
-        // Already signed in: do not start a device flow that would shadow the
-        // connected state; re-login goes through an explicit logout first.
-        return { kind: 'success', text: '当前已有 ChatGPT 凭据。如需重新登录，请先运行 /codex-logout。' }
-      }
-      login.start()
-      const state = await login.waitState(30000)
-      if (state?.status === 'pending') {
-        return {
-          kind: 'success',
-          text: `请在浏览器打开 ${state.verificationUri}，输入设备码 ${state.userCode}（${minutesText(state.expiresInSeconds)} 内有效），然后运行 /codex-status 查看结果。`,
-        }
-      }
-      if (state?.status === 'complete') {
-        return {
-          kind: 'success',
-          text: `已连接 ChatGPT 账号${state.accountId !== undefined ? `（${state.accountId}）` : ''}。请在 Models 设置页把模型切到 codex-oauth 提供方。`,
-        }
-      }
-      if (state?.status === 'failed') {
-        return { kind: 'error', text: `Codex 登录失败：${state.message}` }
-      }
-      return { kind: 'success', text: '登录仍在启动中（网络较慢）。请稍后运行 /codex-status 获取设备码与状态。' }
-    },
-  })
-
   ctx.commands.register({
     name: 'codex-status',
     description: '查看 Codex 订阅登录状态',
@@ -72,7 +33,7 @@ export function installCommands(ctx, login, store, providerId) {
       if (pending?.status === 'failed') {
         return { kind: 'error', text: `上次登录失败：${pending.message}` }
       }
-      return { kind: 'success', text: '未登录。运行 /codex-login 开始登录。' }
+      return { kind: 'success', text: '未登录。请到设置页的 Codex 订阅区块登录。' }
     },
   })
 
