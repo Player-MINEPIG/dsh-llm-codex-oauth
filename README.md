@@ -37,6 +37,11 @@ dsh plugin --profile web add file:/Users/pmp/AI/DeepseekHarness
 
 - 纯 ESM JavaScript，无构建步骤；包根导出命名导出 `apply` / `inject` / `name`。
 - `dsh.bundle.patch` 指向 `cordis.patch.yml`，`dsh plugin add` 安装后自动加入 profile 的 bundle 层。
+- 测试套件在 `test/`：`smoke.mjs`（插件加载/模型目录/凭据库/命令注册）、`stream-test.mjs`（流翻译/回放/错误分类/选项装配，22 项断言）、`login-smoke.mjs`（设备码流联网冒烟，不涉及账号）。它们通过 profile 依赖树解析依赖，直接放进已安装本插件的 profile 目录运行，例如：
+  ```sh
+  cp test/*.mjs .testhome/profiles/codex-test2/ && cd .testhome/profiles/codex-test2
+  node smoke.mjs && node stream-test.mjs && node login-smoke.mjs
+  ```
 - 本地验证（不需要 pnpm、不需要动运行中的 web profile）：
   ```sh
   # 依赖软链（测试后建议移除）
