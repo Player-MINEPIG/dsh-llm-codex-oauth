@@ -50,4 +50,4 @@ writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
 
 console.log(`installed ${PLUGIN} into profile "${PROFILE}" (no pnpm)`)
 console.log(`restart dsh to load it: dsh ${PROFILE}  (or: npx @deepseek-ai/dsh ${PROFILE})`)
-console.log(`\nuninstall: delete "${dest}" and remove "${PLUGIN}" from dsh.profile.bundles in "${pkgPath}", then restart.`)
+console.log(`\nuninstall: node scripts/uninstall.mjs ${PROFILE === 'web' ? '' : PROFILE}`)

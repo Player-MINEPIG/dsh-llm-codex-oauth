@@ -52,7 +52,16 @@ node scripts/install.mjs            # 默认装到 web profile
 node scripts/install.mjs headless   # 指定其他 profile
 ```
 
-脚本会自动定位 `$DSH_HOME`（默认 `~/.dsh`），把插件复制进 profile 的 `node_modules` 并写入 bundle 列表，全程不碰 pnpm；卸载方式脚本末尾会打印。Windows 上在 cmd / PowerShell 里直接运行同一命令即可，插件本身是纯 Node 实现，不依赖 bash / pwsh。
+脚本会自动定位 `$DSH_HOME`（默认 `~/.dsh`），把插件复制进 profile 的 `node_modules` 并写入 bundle 列表，全程不碰 pnpm。Windows 上在 cmd / PowerShell 里直接运行同一命令即可，插件本身是纯 Node 实现，不依赖 bash / pwsh。
+
+对应的卸载脚本：
+
+```sh
+node scripts/uninstall.mjs            # 从 web profile 卸载
+node scripts/uninstall.mjs headless   # 从其他 profile 卸载
+```
+
+（若当初是用 `dsh plugin add`（pnpm）安装的，优先用官方 `dsh plugin --profile <name> remove dsh-llm-codex-oauth`；卸载脚本也会顺带清掉 manifest 里的条目作为兜底。）
 
 > **必须用 `file:` 前缀**。直接传目录路径时 pnpm 会以 `link:`（软链到本仓库）安装，
 > Node 按真实路径解析插件内部依赖时会找不到 `node_modules` 而加载失败；

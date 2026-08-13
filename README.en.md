@@ -52,7 +52,16 @@ node scripts/install.mjs            # installs into the web profile by default
 node scripts/install.mjs headless   # or another profile name
 ```
 
-It auto-locates `$DSH_HOME` (default `~/.dsh`), copies the plugin into the profile's `node_modules`, and adds the bundle entry — no pnpm involved. The script prints the uninstall steps at the end. On Windows, run the same command in cmd or PowerShell; the plugin itself is pure Node and does not depend on bash or pwsh.
+It auto-locates `$DSH_HOME` (default `~/.dsh`), copies the plugin into the profile's `node_modules`, and adds the bundle entry — no pnpm involved. On Windows, run the same command in cmd or PowerShell; the plugin itself is pure Node and does not depend on bash or pwsh.
+
+The matching uninstall script:
+
+```sh
+node scripts/uninstall.mjs            # uninstall from the web profile
+node scripts/uninstall.mjs headless   # uninstall from another profile
+```
+
+(If you installed via `dsh plugin add` (pnpm), prefer the official `dsh plugin --profile <name> remove dsh-llm-codex-oauth`; the uninstall script also clears the manifest entries as a fallback.)
 
 > **The `file:` prefix is required.** Passing a bare directory path makes pnpm install with `link:` (a symlink into this repo),
 > and Node's realpath resolution can no longer find the plugin's own `node_modules`, so loading fails.
