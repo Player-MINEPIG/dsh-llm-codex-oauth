@@ -15,6 +15,8 @@
   - [功能特性](#功能特性)
   - [安装](#安装)
     - [免 pnpm 的一键安装（本地 / 开发用，跨平台）](#免-pnpm-的一键安装本地--开发用跨平台)
+    - [手动命令行安装](#手动命令行安装)
+    - [验证安装完成](#验证安装完成)
   - [使用](#使用)
   - [工作原理](#工作原理)
   - [开发](#开发)
@@ -51,6 +53,8 @@ node scripts/uninstall.mjs headless   # 从其他 profile 卸载
 
 （若当初是用 `dsh plugin add`（pnpm）安装的，优先用官方 `dsh plugin --profile <name> remove dsh-llm-codex-oauth`；卸载脚本也会顺带清掉 manifest 里的条目作为兜底。）
 
+### 手动命令行安装
+
 ```sh
 # 前置 1：需要 pnpm（dsh plugin 转发给它）。没有的话先：npm install -g pnpm
 # 前置 2：需要 dsh CLI，二选一：
@@ -74,6 +78,8 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 > **pnpm 11 的 ignored-builds 提示会让 `dsh plugin` 报 "pnpm failed"**（依赖其实已装好）。
 > 修复：把 profile 目录 `pnpm-workspace.yaml` 里 pnpm 生成的 `allowBuilds:` 占位值改为 `false`
 > （`@google/genai`、`protobufjs` 的构建脚本对本插件无关紧要），然后重跑同一命令完成 bundle 对账。
+
+### 验证安装完成
 
 安装后 `dsh --profile web --dump-config`（或 `npx @deepseek-ai/dsh --profile web --dump-config`）应能看到 `llm-codex-oauth` 行。
 

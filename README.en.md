@@ -15,6 +15,8 @@ Use your **ChatGPT / Codex subscription** (Plus / Pro / Business / Edu) inside d
   - [Features](#features)
   - [Installation](#installation)
     - [One-command install without pnpm (local / development, cross-platform)](#one-command-install-without-pnpm-local--development-cross-platform)
+    - [Install Manually](#install-manually)
+    - [Verification](#verification)
   - [Usage](#usage)
   - [How it works](#how-it-works)
   - [Development](#development)
@@ -51,6 +53,8 @@ node scripts/uninstall.mjs headless   # uninstall from another profile
 
 (If you installed via `dsh plugin add` (pnpm), prefer the official `dsh plugin --profile <name> remove dsh-llm-codex-oauth`; the uninstall script also clears the manifest entries as a fallback.)
 
+### Install Manually
+
 ```sh
 # Prereq 1: pnpm is required (dsh plugin forwards to it). Install first if missing: npm install -g pnpm
 # Prereq 2: the dsh CLI is required — either:
@@ -74,6 +78,8 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 > **pnpm 11's ignored-builds notice makes `dsh plugin` report "pnpm failed"** (the packages are actually installed).
 > Fix: in the profile's `pnpm-workspace.yaml`, change the `allowBuilds:` placeholders pnpm generated to `false`
 > (the `@google/genai` and `protobufjs` build scripts are irrelevant to this plugin), then re-run the same command to finish bundle reconciliation.
+
+### Verification
 
 After installing, `dsh --profile web --dump-config` (or `npx @deepseek-ai/dsh --profile web --dump-config`) should show the `llm-codex-oauth` row.
 
