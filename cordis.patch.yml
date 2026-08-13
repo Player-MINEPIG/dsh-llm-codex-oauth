@@ -14,7 +14,5 @@
         # Credential reference: the OAuth credential JSON lives in the dsh
         # credential store ($DSH_HOME/.credentials.yaml), never in a config file.
         credentialRef: OPENAI_CODEX_OAUTH
-        # Settings namespace hosting the login/logout section.
-        settingsNs: llm-codex-oauth
         # Per-chunk idle timeout before the stream is aborted, in milliseconds.
         streamIdleTimeoutMs: 300000

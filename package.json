@@ -1,32 +1,43 @@
 {
   "name": "dsh-llm-codex-oauth",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Use your ChatGPT/Codex subscription in dsh through the OpenAI Codex OAuth flow.",
   "type": "module",
   "main": "src/index.js",
   "exports": {
+    "./package.json": "./package.json",
     ".": "./src/index.js",
-    "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./client": "./dist/client.js",
+    "./src/*": "./src/*"
   },
   "files": [
     "src",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "dist"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
     }
   },
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
-    "@earendil-works/pi-ai": "^0.82.1",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@earendil-works/pi-ai": "^0.82.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "react": "18.3.1"
   }
 }

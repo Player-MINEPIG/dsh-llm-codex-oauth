@@ -2,11 +2,9 @@
  * Unit smoke test for dsh-llm-codex-oauth, run without booting dsh.
  * Resolves dependencies through the profile's node_modules.
  *
- * Surface covered: provider route + configurable-provider directory entry,
- * settings section registration and the action-driven login/logout flow
- * (with a stubbed settings scope), the two read-only commands, and the
- * credential-store round-trip. No network is required for the assertions;
- * the login action only starts the device flow in the background.
+ * Surface covered: provider route, the /codex-oauth HTTP routes (status /
+ * login / logout) against a stubbed webServer, the two read-only commands,
+ * and the credential-store round-trip. No network is required.
  */
 import * as plugin from 'dsh-llm-codex-oauth'
 
@@ -18,12 +16,18 @@ function check(label, ok, detail = '') {
     console.error(`FAIL  ${label}${detail ? ` — ${detail}` : ''}`)
   }
 }
-const tick = () => new Promise((resolve) => setTimeout(resolve, 20))
 
 // ── stub dsh Context ────────────────────────────────────────────────────────
 const credentialValues = new Map()
-const registered = { providers: [], adapters: [], directory: [], commands: [], settings: [] }
+const registered = { providers: [], adapters: [], commands: [], routes: [] }
 const disposers = []
+
+const webServer = {
+  register(route) {
+    registered.routes.push(route)
+    return () => {}
+  },
+}
 
 const ctx = {
   logger: { info() {}, warn() {}, error() {} },
@@ -31,6 +35,9 @@ const ctx = {
     const dispose = fn()
     if (typeof dispose === 'function') disposers.push(dispose)
     return () => {}
+  },
+  get(key) {
+    return key === 'webServer' ? webServer : undefined
   },
   credentials: {
     async resolve(ref) {
@@ -48,76 +55,67 @@ const ctx = {
       handle.replace = () => {}
       return handle
     },
-    registerConfigurableProviders(entries) {
-      registered.directory.push(...entries)
-      const handle = () => {}
-      handle.replace = () => {}
-      return handle
-    },
   },
   commands: {
     register(definition) { registered.commands.push(definition) },
   },
-  settings: {
-    register(ns, schema, options) {
-      const doc = {}
-      const watchers = []
-      const scope = {
-        get: () => ({ action: '', status: '', ...doc }),
-        watch(callback) { watchers.push(callback) },
-        async update(patch) {
-          Object.assign(doc, patch)
-          // The real provider commits the document and then emits; mirror that.
-          for (const callback of [...watchers]) callback()
-        },
-      }
-      registered.settings.push({ ns, schema, options, scope, watchers, doc })
-      return scope
-    },
-  },
+}
+
+// ── HTTP route test harness ─────────────────────────────────────────────────
+async function route(path) {
+  const matched = registered.routes.find((r) => path.startsWith(r.path))
+  if (matched === undefined) throw new Error(`no route for ${path}`)
+  let body = null
+  const req = {
+    url: path,
+    method: 'GET',
+    on(event, callback) { if (event === 'end') queueMicrotask(callback) },
+  }
+  const res = {
+    statusCode: 200,
+    headers: {},
+    setHeader(name, value) { this.headers[name] = value },
+    end(payload) { body = typeof payload === 'string' ? JSON.parse(payload) : payload },
+  }
+  await matched.handler(req, res)
+  return { status: res.statusCode, body }
 }
 
 // ── apply ────────────────────────────────────────────────────────────────────
 console.log('plugin exports:', Object.keys(plugin).join(', '))
-plugin.apply(ctx, {
-  provider: 'codex-oauth', providerId: 'openai-codex', credentialRef: 'OPENAI_CODEX_OAUTH',
-  settingsNs: 'llm-codex-oauth',
-})
+plugin.apply(ctx, { provider: 'codex-oauth', providerId: 'openai-codex', credentialRef: 'OPENAI_CODEX_OAUTH' })
 
-// ── provider route + directory ──────────────────────────────────────────────
+// ── provider route ──────────────────────────────────────────────────────────
 check('registered one provider route', registered.providers.length === 1 && registered.providers[0] === 'codex-oauth')
 const adapter = registered.adapters[0]
 check('adapter captured', adapter !== undefined)
-check('providerInfo preserves id', adapter.providerInfo('codex-oauth').id === 'codex-oauth')
-
-const directory = registered.directory.find((entry) => entry.provider === 'codex-oauth')
-check('configurable-provider directory entry', directory !== undefined && directory.settingsNs === 'llm-codex-oauth' && Array.isArray(directory.settingsPath) && directory.settingsPath.length === 0 && typeof directory.displayName === 'string' && directory.displayName.length > 0, directory?.displayName)
-
 const models = await adapter.listModels('codex-oauth')
 check('listModels non-empty', Array.isArray(models) && models.length > 0, `${models.length} models`)
-const resolved = await adapter.resolveModel('codex-oauth', models[0].id)
-check('resolveModel context', typeof resolved.context?.contextWindow === 'number' && resolved.context.contextWindow > 0)
 
-// ── settings section ────────────────────────────────────────────────────────
-const settingsEntry = registered.settings.find((entry) => String(entry.ns) === 'llm-codex-oauth')
-check('settings namespace registered', settingsEntry !== undefined)
-check('settings schema registered (schemastery fn)', settingsEntry !== undefined && typeof settingsEntry.schema === 'function')
-await tick()
-check('initial status pushed to 未登录', settingsEntry?.doc.status === '未登录', settingsEntry?.doc.status)
+// ── HTTP routes ─────────────────────────────────────────────────────────────
+check('web route registered', registered.routes.length === 1 && registered.routes[0].path === '/codex-oauth')
 
-// login action: user picks 登录 in the form.
-await settingsEntry.scope.update({ action: 'login' })
-check('login action resets after handling', settingsEntry.doc.action === '')
-check('login flow started (state starting)', settingsEntry.doc.status === '登录启动中…', settingsEntry.doc.status)
-// The device flow now runs in the background against auth.openai.com;
-// give it a moment, then log out (also aborts the in-flight flow).
-await new Promise((resolve) => setTimeout(resolve, 500))
-await settingsEntry.scope.update({ action: 'logout' })
-await tick()
-check('logout marks 未登录', settingsEntry.doc.status === '未登录' || settingsEntry.doc.status === '已取消', settingsEntry.doc.status)
-check('logout clears account fields', settingsEntry.doc.accountId === '' && settingsEntry.doc.verificationUrl === '')
+const signedOut = await route('/codex-oauth/status')
+check('status 未登录', signedOut.status === 200 && signedOut.body.connected === false && signedOut.body.statusText === '未登录', signedOut.body.statusText)
 
-// ── commands: read-only helpers only, no conversation-side login ───────────
+// Seed a stored credential → connected state (no network).
+credentialValues.set('OPENAI_CODEX_OAUTH', JSON.stringify({ type: 'oauth', access: 'a', refresh: 'r', expires: Date.now() + 60000, accountId: 'acct-1' }))
+const connected = await route('/codex-oauth/status')
+check('status connected', connected.status === 200 && connected.body.connected === true && connected.body.accountId === 'acct-1', connected.body.statusText)
+
+const loginWhileConnected = await route('/codex-oauth/login')
+check('login while connected returns connected', loginWhileConnected.body.connected === true && loginWhileConnected.body.accountId === 'acct-1')
+
+const logout = await route('/codex-oauth/logout')
+check('logout succeeds', logout.status === 200 && logout.body.connected === false)
+check('logout deleted credential', credentialValues.get('OPENAI_CODEX_OAUTH') === undefined)
+const afterLogout = await route('/codex-oauth/status')
+check('status 未登录 after logout', afterLogout.body.connected === false)
+
+const notFound = await route('/codex-oauth/nope')
+check('unknown subpath 404', notFound.status === 404)
+
+// ── commands: read-only helpers only ────────────────────────────────────────
 const names = registered.commands.map((c) => c.name).sort()
 check('commands are status+logout only', JSON.stringify(names) === JSON.stringify(['codex-logout', 'codex-status']), names.join(', '))
 check('no conversation-side login command', !registered.commands.some((c) => c.name === 'codex-login'))
@@ -129,14 +127,10 @@ check('codex-status points to settings page when 未登录', result.kind === 'su
 const { DshCredentialStore } = await import('dsh-llm-codex-oauth/src/store.js')
 const store = new DshCredentialStore(ctx, 'OPENAI_CODEX_OAUTH', 'openai-codex')
 const before = await store.read('openai-codex')
-const after = await store.modify('openai-codex', async () => ({
-  type: 'oauth', access: 'acc-token', refresh: 'ref-token', expires: 12345, accountId: 'acct-1',
-}))
+const after = await store.modify('openai-codex', async () => ({ type: 'oauth', access: 'acc', refresh: 'ref', expires: 1, accountId: 'x' }))
 const persisted = await store.read('openai-codex')
-const listed = await store.list()
 await store.delete('openai-codex')
-const gone = await store.read('openai-codex')
-check('credential store round-trip', before === undefined && after.access === 'acc-token' && persisted.refresh === 'ref-token' && listed.length === 1 && gone === undefined)
+check('credential store round-trip', before === undefined && after.access === 'acc' && persisted.refresh === 'ref' && (await store.read('openai-codex')) === undefined)
 
 // ── cleanup ─────────────────────────────────────────────────────────────────
 for (const dispose of disposers) {

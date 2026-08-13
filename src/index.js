@@ -1,35 +1,35 @@
 /**
  * dsh-llm-codex-oauth — use your ChatGPT/Codex subscription inside dsh.
  *
- * One host-plane plugin row: registers the `codex-oauth` provider route on the
- * dsh LLM seam (backed by pi-ai's built-in openai-codex provider + OAuth
- * credential store bridged to dsh credentials), a settings-page section for
- * login/logout (schema-driven form, no custom client bundle), and two
- * read-only conversation commands (/codex-status, /codex-logout).
+ * Host plane: registers the `codex-oauth` provider route on the dsh LLM seam
+ * (pi-ai's built-in openai-codex provider + OAuth credential store bridged to
+ * dsh credentials), exposes /codex-oauth HTTP routes for the settings-panel
+ * client half (when a web server is present), and registers two read-only
+ * conversation commands (/codex-status, /codex-logout).
  *
  * Namespace plugin shape: named exports `name` / `inject` / `apply`, no
- * default export (the loader resolves the row `name:` to this package).
+ * default export. The browser half ships separately via `dsh.client` →
+ * ./client (dist/client.js).
  *
  * @module dsh-llm-codex-oauth
  */
 import { createModels } from '@earendil-works/pi-ai'
 import { builtinProviders } from '@earendil-works/pi-ai/providers/all'
 import { DshCredentialStore } from './store.js'
-import { CodexAdapter, PROVIDER_NAME } from './adapter.js'
+import { CodexAdapter } from './adapter.js'
 import { LoginManager } from './login.js'
 import { installCommands } from './commands.js'
-import { installCodexSettings } from './settings.js'
+import { installServerRoutes } from './server.js'
 
 export const name = 'dsh-llm-codex-oauth'
 
-/** Hard dependencies: all four are mounted by the dsh base composition. */
-export const inject = ['llm', 'credentials', 'commands', 'settings']
+/** Hard dependencies: all three are mounted by the dsh base composition. */
+export const inject = ['llm', 'credentials', 'commands']
 
 const DEFAULTS = {
   provider: 'codex-oauth',
   providerId: 'openai-codex',
   credentialRef: 'OPENAI_CODEX_OAUTH',
-  settingsNs: 'llm-codex-oauth',
   streamIdleTimeoutMs: 300000,
 }
 
@@ -41,7 +41,6 @@ export function apply(ctx, config) {
   const provider = config?.provider ?? DEFAULTS.provider
   const providerId = config?.providerId ?? DEFAULTS.providerId
   const credentialRef = config?.credentialRef ?? DEFAULTS.credentialRef
-  const settingsNs = config?.settingsNs ?? DEFAULTS.settingsNs
   const streamIdleTimeoutMs = config?.streamIdleTimeoutMs ?? DEFAULTS.streamIdleTimeoutMs
 
   const catalogProvider = builtinProviders().find((entry) => entry.id === providerId)
@@ -56,18 +55,10 @@ export function apply(ctx, config) {
   models.setProvider(catalogProvider)
 
   ctx.llm.registerAdapter([provider], new CodexAdapter(models, providerId, { streamIdleTimeoutMs }))
-  // Configuration surface: associate the route with the settings section so
-  // the Models page presents the provider next to its login controls.
-  ctx.llm.registerConfigurableProviders([{
-    provider,
-    displayName: PROVIDER_NAME,
-    settingsNs,
-    settingsPath: [],
-  }])
 
   const login = new LoginManager(ctx, models, providerId)
-  installCodexSettings(ctx, login, store, provider, providerId, settingsNs)
+  installServerRoutes(ctx, login, store, providerId)
   installCommands(ctx, login, store, providerId)
 
-  ctx.logger.info(`dsh-llm-codex-oauth: provider "${provider}" ready (pi-ai ${providerId}; credential ${credentialRef}; settings ${settingsNs})`)
+  ctx.logger.info(`dsh-llm-codex-oauth: provider "${provider}" ready (pi-ai ${providerId}; credential ${credentialRef})`)
 }
