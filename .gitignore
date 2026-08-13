@@ -1,0 +1,11 @@
+# Never commit secrets or runtime data. The OAuth credential lives in the
+# dsh credential store ($DSH_HOME/.credentials.yaml), outside this repo.
+node_modules/
+.testhome/
+.pnpm-store/
+.tools/
+*.log
+.env
+.credentials.yaml
+sessions/
+.DS_Store

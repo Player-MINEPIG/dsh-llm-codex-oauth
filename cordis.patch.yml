@@ -1,0 +1,18 @@
+# dsh-llm-codex-oauth bundle layer — one host-plane row inserted into the
+# profile root.
+#
+# The row mounts the plugin on the HOST plane (model routes, credentials, and
+# the command registry all live there). Nothing here touches agent presets.
+- insert:
+    - id: llm-codex-oauth
+      name: 'dsh-llm-codex-oauth'
+      config:
+        # dsh provider route shown in the Models page and used in requests.
+        provider: codex-oauth
+        # pi-ai catalog provider that owns the wire protocol and OAuth flow.
+        providerId: openai-codex
+        # Credential reference: the OAuth credential JSON lives in the dsh
+        # credential store ($DSH_HOME/.credentials.yaml), never in a config file.
+        credentialRef: OPENAI_CODEX_OAUTH
+        # Per-chunk idle timeout before the stream is aborted, in milliseconds.
+        streamIdleTimeoutMs: 300000
