@@ -10,13 +10,16 @@ Use your **ChatGPT / Codex subscription** (Plus / Pro / Business / Edu) inside d
 
 ## Table of contents
 
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [How it works](#how-it-works)
-- [Development](#development)
-- [Security & compliance](#security--compliance)
-- [License](#license)
+- [dsh-llm-codex-oauth](#dsh-llm-codex-oauth)
+  - [Table of contents](#table-of-contents)
+  - [Features](#features)
+  - [Installation](#installation)
+    - [One-command install without pnpm (local / development, cross-platform)](#one-command-install-without-pnpm-local--development-cross-platform)
+  - [Usage](#usage)
+  - [How it works](#how-it-works)
+  - [Development](#development)
+  - [Security \& compliance](#security--compliance)
+  - [License](#license)
 
 ## Features
 
@@ -27,21 +30,6 @@ Use your **ChatGPT / Codex subscription** (Plus / Pro / Business / Edu) inside d
 - **Multi-turn**: preserves provider-native replay metadata (signatures, …) for reliable multi-turn requests.
 
 ## Installation
-
-```sh
-# Prereq 1: pnpm is required (dsh plugin forwards to it). Install first if missing: npm install -g pnpm
-# Prereq 2: the dsh CLI is required — either:
-#   · install it globally (recommended): npm install -g @deepseek-ai/dsh
-#   · or use it ad hoc: replace `dsh` with `npx @deepseek-ai/dsh` below
-
-# With dsh installed globally:
-dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
-
-# Ad hoc, via npx:
-npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
-
-# restart dsh web so the new bundle takes effect
-```
 
 ### One-command install without pnpm (local / development, cross-platform)
 
@@ -62,6 +50,21 @@ node scripts/uninstall.mjs headless   # uninstall from another profile
 ```
 
 (If you installed via `dsh plugin add` (pnpm), prefer the official `dsh plugin --profile <name> remove dsh-llm-codex-oauth`; the uninstall script also clears the manifest entries as a fallback.)
+
+```sh
+# Prereq 1: pnpm is required (dsh plugin forwards to it). Install first if missing: npm install -g pnpm
+# Prereq 2: the dsh CLI is required — either:
+#   · install it globally (recommended): npm install -g @deepseek-ai/dsh
+#   · or use it ad hoc: replace `dsh` with `npx @deepseek-ai/dsh` below
+
+# With dsh installed globally:
+dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
+# Ad hoc, via npx:
+npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
+# restart dsh web so the new bundle takes effect
+```
 
 > **The `file:` prefix is required.** Passing a bare directory path makes pnpm install with `link:` (a symlink into this repo),
 > and Node's realpath resolution can no longer find the plugin's own `node_modules`, so loading fails.

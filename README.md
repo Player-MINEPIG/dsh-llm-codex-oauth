@@ -10,13 +10,16 @@
 
 ## 目录
 
-- [功能特性](#功能特性)
-- [安装](#安装)
-- [使用](#使用)
-- [工作原理](#工作原理)
-- [开发](#开发)
-- [安全与合规](#安全与合规)
-- [License](#license)
+- [dsh-llm-codex-oauth](#dsh-llm-codex-oauth)
+  - [目录](#目录)
+  - [功能特性](#功能特性)
+  - [安装](#安装)
+    - [免 pnpm 的一键安装（本地 / 开发用，跨平台）](#免-pnpm-的一键安装本地--开发用跨平台)
+  - [使用](#使用)
+  - [工作原理](#工作原理)
+  - [开发](#开发)
+  - [安全与合规](#安全与合规)
+  - [License](#license)
 
 ## 功能特性
 
@@ -27,21 +30,6 @@
 - **多轮对话**：完整保留 provider 原生回放元数据（签名等），支持跨轮次多轮请求。
 
 ## 安装
-
-```sh
-# 前置 1：需要 pnpm（dsh plugin 转发给它）。没有的话先：npm install -g pnpm
-# 前置 2：需要 dsh CLI，二选一：
-#   · 全局安装（推荐）：npm install -g @deepseek-ai/dsh
-#   · 临时使用：把下面命令里的 dsh 换成 npx @deepseek-ai/dsh
-
-# 已全局安装 dsh 时：
-dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
-
-# 未全局安装、临时用 npx 时：
-npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
-
-# 重启 dsh web 使新 bundle 生效
-```
 
 ### 免 pnpm 的一键安装（本地 / 开发用，跨平台）
 
@@ -62,6 +50,21 @@ node scripts/uninstall.mjs headless   # 从其他 profile 卸载
 ```
 
 （若当初是用 `dsh plugin add`（pnpm）安装的，优先用官方 `dsh plugin --profile <name> remove dsh-llm-codex-oauth`；卸载脚本也会顺带清掉 manifest 里的条目作为兜底。）
+
+```sh
+# 前置 1：需要 pnpm（dsh plugin 转发给它）。没有的话先：npm install -g pnpm
+# 前置 2：需要 dsh CLI，二选一：
+#   · 全局安装（推荐）：npm install -g @deepseek-ai/dsh
+#   · 临时使用：把下面命令里的 dsh 换成 npx @deepseek-ai/dsh
+
+# 已全局安装 dsh 时：
+dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
+# 未全局安装、临时用 npx 时：
+npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
+# 重启 dsh web 使新 bundle 生效
+```
 
 > **必须用 `file:` 前缀**。直接传目录路径时 pnpm 会以 `link:`（软链到本仓库）安装，
 > Node 按真实路径解析插件内部依赖时会找不到 `node_modules` 而加载失败；
