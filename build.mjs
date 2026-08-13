@@ -3,8 +3,10 @@ import { readFileSync, writeFileSync } from 'node:fs'
 
 const id = 'dsh-llm-codex-oauth'
 
-// 1. Bundle the client half to CommonJS (react inlined; no external requires
-//    — the client code imports nothing from @deepseek-ai/*).
+// 1. Bundle the client half to CommonJS. `react` and `@deepseek-ai/*` stay
+//    external: the factory's module-system `require` resolves them from the
+//    shell's module table (react is a provided seed word — bundling our own
+//    copy would break hooks against the shell's renderer).
 await build({
   entryPoints: ['src/client.js'],
   bundle: true,
@@ -13,6 +15,7 @@ await build({
   target: 'es2022',
   outfile: 'dist/client.cjs',
   minify: false,
+  external: ['react', '@deepseek-ai/*'],
 })
 
 // 2. Wrap the CJS body in the dsh client-modules factory handoff. The bundle
