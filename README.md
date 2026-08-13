@@ -29,9 +29,16 @@ dsh plugin --profile web add file:/Users/pmp/AI/DeepseekHarness/dsh-llm-codex-oa
 
 安装后 `dsh --profile web --dump-config` 应能看到 `llm-codex-oauth` 行。
 
+> **更新插件代码**：`file:` 安装是硬链接快照，编辑器替换式写入不会被 pnpm 感知，直接重跑
+> `add` 不会刷新。请先 bump `package.json` 的 version，再完整重装并重启 dsh：
+> ```sh
+> dsh plugin --profile web remove dsh-llm-codex-oauth
+> dsh plugin --profile web add file:/Users/pmp/AI/DeepseekHarness/dsh-llm-codex-oauth
+> ```
+
 ## 使用
 
-1. 在 dsh 对话里输入 `/codex-login` —— 得到验证网址和设备码。
+1. 在 dsh 对话里输入 `/codex-login`（命令选择器里选中会先把 `/codex-login ` 填入输入框，回车执行）——得到验证网址和设备码。
 2. 浏览器打开 `https://auth.openai.com/codex/device`，输入设备码，登录 ChatGPT 账号。
 3. `/codex-status` 查看是否已连接（会显示 accountId 与 token 有效期）。
 4. 在 Models 设置页把模型切到 `codex-oauth` 提供方下的某个模型。

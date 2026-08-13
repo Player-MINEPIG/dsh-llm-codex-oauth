@@ -17,6 +17,10 @@ export function installCommands(ctx, login, store, providerId) {
   ctx.commands.register({
     name: 'codex-login',
     description: '用 ChatGPT 账号登录（设备码），启用 Codex 订阅模型',
+    // Declaring an input descriptor makes the slash-menu pick claim the token
+    // into the composer ("/codex-login ") instead of executing immediately:
+    // select → token pasted into the input → Enter executes.
+    input: { hint: '直接按回车开始登录（无需参数）' },
     async handler() {
       const existing = await store.read(providerId)
       if (existing !== undefined) {
@@ -48,6 +52,7 @@ export function installCommands(ctx, login, store, providerId) {
   ctx.commands.register({
     name: 'codex-status',
     description: '查看 Codex 订阅登录状态',
+    input: { hint: '直接按回车查看状态（无需参数）' },
     async handler() {
       const pending = login.state
       if (pending?.status === 'pending') {
@@ -74,6 +79,7 @@ export function installCommands(ctx, login, store, providerId) {
   ctx.commands.register({
     name: 'codex-logout',
     description: '登出 ChatGPT 账号并删除本地 OAuth 凭据',
+    input: { hint: '直接按回车确认登出（无需参数）' },
     async handler() {
       await login.logout()
       return { kind: 'success', text: '已登出，本地 OAuth 凭据已删除。' }

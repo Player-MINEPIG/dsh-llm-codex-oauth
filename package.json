@@ -1,6 +1,6 @@
 {
   "name": "dsh-llm-codex-oauth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Use your ChatGPT/Codex subscription in dsh through the OpenAI Codex OAuth flow.",
   "type": "module",
   "main": "src/index.js",
