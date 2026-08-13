@@ -59,7 +59,7 @@ function CodexSection() {
   )
 }
 
-export const name = 'dsh-llm-codex-oauth-client'
+export const name = 'dsh-llm-codex-oauth'
 export const inject = ['slots']
 
 export function apply(ctx) {

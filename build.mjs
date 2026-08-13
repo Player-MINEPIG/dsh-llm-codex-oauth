@@ -1,15 +1,36 @@
 import { build } from 'esbuild'
+import { readFileSync, writeFileSync } from 'node:fs'
 
+const id = 'dsh-llm-codex-oauth'
+
+// 1. Bundle the client half to CommonJS (react inlined; no external requires
+//    — the client code imports nothing from @deepseek-ai/*).
 await build({
   entryPoints: ['src/client.js'],
   bundle: true,
-  format: 'esm',
+  format: 'cjs',
   platform: 'browser',
   target: 'es2022',
-  outfile: 'dist/client.js',
-  // Client packages are resolved by the browser runtime's plugin inventory;
-  // only React (and our own code) are inlined here.
-  external: ['@deepseek-ai/*'],
+  outfile: 'dist/client.cjs',
   minify: false,
 })
-console.log('built dist/client.js')
+
+// 2. Wrap the CJS body in the dsh client-modules factory handoff. The bundle
+//    is loaded as a classic <script>, so it must register itself:
+//    window.__ModuleLoader__.load({ id, factory }). The factory receives the
+//    module-system `require` and returns `module.exports` (the client plugin
+//    exports: name/inject/apply).
+const body = readFileSync('dist/client.cjs', 'utf8')
+const wrapped = `window.__ModuleLoader__.load({
+\tid: ${JSON.stringify(id)},
+\tfactory: (require) => {
+\t\tvar module = { exports: {} };
+\t\tvar exports = module.exports;
+\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+${body}
+\t\treturn module.exports;
+\t}
+});
+`
+writeFileSync('dist/client.js', wrapped)
+console.log('built dist/client.js (client-modules factory format)')
