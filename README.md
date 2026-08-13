@@ -1,10 +1,22 @@
 # dsh-llm-codex-oauth
 
+[English](README.en.md) | 中文
+
 > 本项目由 DeepSeek-V4-Pro 在 DeepSeek Harness 用时约 3h 不到完成，未进行完整 Code Review，仅人工审查确保基础功能可用，使用前需了解安全风险并自行为此负责。
 
 在 dsh（DeepSeek Harness）里使用你的 **ChatGPT / Codex 订阅**（Plus / Pro / Business / Edu）。插件通过 OpenAI Codex 的 OAuth 流程登录 ChatGPT 账号，把订阅额度暴露成 dsh 的 `codex-oauth` 模型提供方。
 
 > ⚠️ **风险提示**：本插件调用 ChatGPT 网页版后端（`chatgpt.com/backend-api`），这是一个未公开、官方不支持的接口，违反 OpenAI 服务条款的风险真实存在，可能导致账号受限。请自行评估后使用。
+
+## 目录
+
+- [功能特性](#功能特性)
+- [安装](#安装)
+- [使用](#使用)
+- [工作原理](#工作原理)
+- [开发](#开发)
+- [安全与合规](#安全与合规)
+- [License](#license)
 
 ## 功能特性
 
