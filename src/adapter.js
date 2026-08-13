@@ -172,7 +172,10 @@ function foreignAssistant(message) {
 /** Recombine durable harness content with validated replay metadata. */
 function replayedAssistant(message, source, rawState, providerId) {
   const state = readReplayState(rawState)
-  if (state.provider !== source.provider) return invalidReplay('provider does not match assistant source')
+  // Accept either the dsh route (what v0.3.4+ stores) or the pi-ai catalog id
+  // (what older versions persisted) — both are legitimate owners of this
+  // adapter's messages.
+  if (state.provider !== source.provider && state.provider !== providerId) return invalidReplay('provider does not match assistant source')
   if (state.model !== source.model) return invalidReplay('model does not match assistant source')
   if (state.blocks.length !== message.content.length) return invalidReplay('block count does not match assistant content')
   return {

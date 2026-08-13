@@ -219,7 +219,7 @@ async function* tinyEvents() {
   check('T7 unknown reasoning effort refused', refused)
 }
 
-// ── T8: provider mismatch in replay state is rejected (regression) ──────────
+// ── T8: truly-foreign provider in replay state is rejected (regression) ─────
 {
   const { adapter } = makeAdapter(tinyEvents)
   let rejected = false
@@ -234,7 +234,7 @@ async function* tinyEvents() {
             kind: 'model', provider: 'codex-oauth', model: model.id,
             replayState: {
               kind: 'codex-oauth', version: 1, api: 'openai-codex-responses',
-              provider: 'openai-codex', model: model.id, stopReason: 'stop',
+              provider: 'deepseek-official', model: model.id, stopReason: 'stop',
               blocks: [{ type: 'text', textSignature: 'sig' }],
             },
           },
@@ -246,7 +246,34 @@ async function* tinyEvents() {
   } catch (error) {
     rejected = error instanceof LlmError && error.failure?.code === 'INVALID_REPLAY_STATE'
   }
-  check('T8 provider mismatch rejects with INVALID_REPLAY_STATE', rejected)
+  check('T8 foreign provider rejects with INVALID_REPLAY_STATE', rejected)
+}
+
+// ── T9: legacy replay state (catalog id) still accepts (back-compat) ────────
+{
+  const { adapter, getCaptured } = makeAdapter(tinyEvents)
+  await collect(adapter, {
+    provider: 'codex-oauth', model: model.id,
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: 'first' }] },
+      {
+        role: 'assistant',
+        source: {
+          kind: 'model', provider: 'codex-oauth', model: model.id,
+          replayState: {
+            kind: 'codex-oauth', version: 1, api: 'openai-codex-responses',
+            provider: 'openai-codex', model: model.id, stopReason: 'stop',
+            blocks: [{ type: 'text', textSignature: 'sig-legacy' }],
+          },
+        },
+        content: [{ type: 'text', text: 'legacy answer' }],
+      },
+      { role: 'user', content: [{ type: 'text', text: 'again' }] },
+    ],
+  })
+  const replayed = getCaptured().context.messages?.[1]
+  check('T9 legacy catalog-id replay accepted', replayed?.provider === 'openai-codex' && replayed?.api === 'openai-codex-responses')
+  check('T9 legacy text keeps signature', replayed?.content?.[0]?.textSignature === 'sig-legacy')
 }
 
 if (failed > 0) {
