@@ -43,16 +43,16 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 # restart dsh web so the new bundle takes effect
 ```
 
-### One-command install without pnpm (local / development)
+### One-command install without pnpm (local / development, cross-platform)
 
-If you don't want to install pnpm or hunt for the profile directory, the repo script copies the plugin and registers the bundle for you:
+If you don't want to install pnpm or hunt for the profile directory, the repo script copies the plugin and registers the bundle for you (Windows / macOS / Linux — just Node, no bash required):
 
 ```sh
-bash scripts/install.sh            # installs into the web profile by default
-bash scripts/install.sh headless   # or another profile name
+node scripts/install.mjs            # installs into the web profile by default
+node scripts/install.mjs headless   # or another profile name
 ```
 
-It auto-locates `$DSH_HOME` (default `~/.dsh`), copies the plugin into the profile's `node_modules`, and adds the bundle entry — no pnpm involved. The script prints the uninstall steps at the end.
+It auto-locates `$DSH_HOME` (default `~/.dsh`), copies the plugin into the profile's `node_modules`, and adds the bundle entry — no pnpm involved. The script prints the uninstall steps at the end. On Windows, run the same command in cmd or PowerShell; the plugin itself is pure Node and does not depend on bash or pwsh.
 
 > **The `file:` prefix is required.** Passing a bare directory path makes pnpm install with `link:` (a symlink into this repo),
 > and Node's realpath resolution can no longer find the plugin's own `node_modules`, so loading fails.

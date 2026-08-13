@@ -43,16 +43,16 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 # 重启 dsh web 使新 bundle 生效
 ```
 
-### 免 pnpm 的一键安装（本地 / 开发用）
+### 免 pnpm 的一键安装（本地 / 开发用，跨平台）
 
-不想装 pnpm、也不想手动找 profile 目录时，仓库脚本会替你复制插件并登记 bundle：
+不想装 pnpm、也不想手动找 profile 目录时，仓库脚本会替你复制插件并登记 bundle（Windows / macOS / Linux 通用，用 Node 即可，无需 bash）：
 
 ```sh
-bash scripts/install.sh            # 默认装到 web profile
-bash scripts/install.sh headless   # 指定其他 profile
+node scripts/install.mjs            # 默认装到 web profile
+node scripts/install.mjs headless   # 指定其他 profile
 ```
 
-脚本会自动定位 `$DSH_HOME`（默认 `~/.dsh`），把插件复制进 profile 的 `node_modules` 并写入 bundle 列表，全程不碰 pnpm；卸载方式脚本末尾会打印。
+脚本会自动定位 `$DSH_HOME`（默认 `~/.dsh`），把插件复制进 profile 的 `node_modules` 并写入 bundle 列表，全程不碰 pnpm；卸载方式脚本末尾会打印。Windows 上在 cmd / PowerShell 里直接运行同一命令即可，插件本身是纯 Node 实现，不依赖 bash / pwsh。
 
 > **必须用 `file:` 前缀**。直接传目录路径时 pnpm 会以 `link:`（软链到本仓库）安装，
 > Node 按真实路径解析插件内部依赖时会找不到 `node_modules` 而加载失败；
