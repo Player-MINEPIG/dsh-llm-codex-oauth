@@ -29,8 +29,17 @@
 ## 安装
 
 ```sh
-# 需要 pnpm（dsh plugin 转发给它）；没有的话先：npm install -g pnpm
+# 前置 1：需要 pnpm（dsh plugin 转发给它）。没有的话先：npm install -g pnpm
+# 前置 2：需要 dsh CLI，二选一：
+#   · 全局安装（推荐）：npm install -g @deepseek-ai/dsh
+#   · 临时使用：把下面命令里的 dsh 换成 npx @deepseek-ai/dsh
+
+# 已全局安装 dsh 时：
 dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
+# 未全局安装、临时用 npx 时：
+npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
 # 重启 dsh web 使新 bundle 生效
 ```
 
@@ -43,13 +52,14 @@ dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 > 修复：把 profile 目录 `pnpm-workspace.yaml` 里 pnpm 生成的 `allowBuilds:` 占位值改为 `false`
 > （`@google/genai`、`protobufjs` 的构建脚本对本插件无关紧要），然后重跑同一命令完成 bundle 对账。
 
-安装后 `dsh --profile web --dump-config` 应能看到 `llm-codex-oauth` 行。
+安装后 `dsh --profile web --dump-config`（或 `npx @deepseek-ai/dsh --profile web --dump-config`）应能看到 `llm-codex-oauth` 行。
 
 > **更新插件代码**：`file:` 安装是硬链接快照，编辑器替换式写入不会被 pnpm 感知，直接重跑
 > `add` 不会刷新。请先 bump `package.json` 的 version，再完整重装并重启 dsh：
 > ```sh
 > dsh plugin --profile web remove dsh-llm-codex-oauth
 > dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+> # 未全局安装 dsh 时，把上面的 dsh 换成 npx @deepseek-ai/dsh
 > ```
 
 ## 使用

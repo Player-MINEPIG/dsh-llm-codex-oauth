@@ -29,8 +29,17 @@ Use your **ChatGPT / Codex subscription** (Plus / Pro / Business / Edu) inside d
 ## Installation
 
 ```sh
-# pnpm is required (dsh plugin forwards to it). Install first if missing: npm install -g pnpm
+# Prereq 1: pnpm is required (dsh plugin forwards to it). Install first if missing: npm install -g pnpm
+# Prereq 2: the dsh CLI is required — either:
+#   · install it globally (recommended): npm install -g @deepseek-ai/dsh
+#   · or use it ad hoc: replace `dsh` with `npx @deepseek-ai/dsh` below
+
+# With dsh installed globally:
 dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
+# Ad hoc, via npx:
+npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+
 # restart dsh web so the new bundle takes effect
 ```
 
@@ -43,12 +52,13 @@ dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 > Fix: in the profile's `pnpm-workspace.yaml`, change the `allowBuilds:` placeholders pnpm generated to `false`
 > (the `@google/genai` and `protobufjs` build scripts are irrelevant to this plugin), then re-run the same command to finish bundle reconciliation.
 
-After installing, `dsh --profile web --dump-config` should show the `llm-codex-oauth` row.
+After installing, `dsh --profile web --dump-config` (or `npx @deepseek-ai/dsh --profile web --dump-config`) should show the `llm-codex-oauth` row.
 
 > **Updating plugin code**: a `file:` install is a hard-link snapshot, so an editor's replace-style write is invisible to pnpm and a plain re-`add` does not refresh it. Bump `package.json`'s version first, then fully reinstall and restart dsh:
 > ```sh
 > dsh plugin --profile web remove dsh-llm-codex-oauth
 > dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
+> # without a global dsh install, replace `dsh` with `npx @deepseek-ai/dsh` above
 > ```
 
 ## Usage
