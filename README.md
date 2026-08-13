@@ -14,7 +14,7 @@
 
 ```sh
 # 需要 pnpm（dsh plugin 转发给它）；没有的话先：npm install -g pnpm
-dsh plugin --profile web add file:/Users/pmp/AI/DeepseekHarness
+dsh plugin --profile web add file:/Users/pmp/AI/DeepseekHarness/dsh-llm-codex-oauth
 # 重启 dsh web 使新 bundle 生效
 ```
 
@@ -63,7 +63,7 @@ dsh plugin --profile web add file:/Users/pmp/AI/DeepseekHarness
   ```sh
   npm install --prefix .tools pnpm --no-save --cache "$PWD/.testhome/npm-cache"
   PATH="$PWD/.tools/node_modules/.bin:$PATH" DSH_HOME="$PWD/.testhome" \
-    dsh plugin --profile codex-test2 add file:/Users/pmp/AI/DeepseekHarness
+    dsh plugin --profile codex-test2 add file:/Users/pmp/AI/DeepseekHarness/dsh-llm-codex-oauth
   # codex-test2 的 bundles 已含 dsh-llm-codex-oauth；冒烟脚本见 .testhome/profiles/codex-test2/
   ```
 - 已知限制：暂不支持图片输入；动态模型目录跟随所装 pi-ai 版本；登录状态（设备码）仅存于进程内存，重启后以凭据库为准。
