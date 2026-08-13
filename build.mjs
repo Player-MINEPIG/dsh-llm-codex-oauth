@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 const id = 'dsh-llm-codex-oauth'
 
@@ -36,4 +36,6 @@ ${body}
 });
 `
 writeFileSync('dist/client.js', wrapped)
+// The .cjs is only an intermediate for wrapping; keep the published dist clean.
+rmSync('dist/client.cjs')
 console.log('built dist/client.js (client-modules factory format)')

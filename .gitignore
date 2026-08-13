@@ -9,3 +9,4 @@ node_modules/
 .credentials.yaml
 sessions/
 .DS_Store
+dist/client.cjs
