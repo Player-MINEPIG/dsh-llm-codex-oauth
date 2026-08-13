@@ -22,6 +22,10 @@ dsh plugin --profile web add file:/Users/pmp/AI/DeepseekHarness
 > Node 按真实路径解析插件内部依赖时会找不到 `node_modules` 而加载失败；
 > `file:` 会把包复制进 profile 的依赖树（已实测验证）。
 > pnpm 11 的 minimum-release-age 门禁会自动放行本插件依赖的 rc 包，无需额外配置。
+>
+> **pnpm 11 的 ignored-builds 提示会让 `dsh plugin` 报 "pnpm failed"**（依赖其实已装好）。
+> 修复：把 profile 目录 `pnpm-workspace.yaml` 里 pnpm 生成的 `allowBuilds:` 占位值改为 `false`
+> （`@google/genai`、`protobufjs` 的构建脚本对本插件无关紧要），然后重跑同一命令完成 bundle 对账。
 
 安装后 `dsh --profile web --dump-config` 应能看到 `llm-codex-oauth` 行。
 
