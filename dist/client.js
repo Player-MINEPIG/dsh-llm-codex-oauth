@@ -56,19 +56,19 @@ function CodexSection() {
   }, [refresh]);
   const connected = data?.connected === true;
   const statusText = data?.statusText ?? "\u52A0\u8F7D\u4E2D\u2026";
+  const pending = !connected && data?.verificationUrl;
   return (0, import_react.createElement)(
     "div",
     { style: { display: "flex", flexDirection: "column", gap: "8px" } },
-    (0, import_react.createElement)("p", null, statusText),
-    connected ? (0, import_react.createElement)("button", { type: "button", onClick: () => act("logout") }, "\u767B\u51FA") : (0, import_react.createElement)("button", { type: "button", onClick: () => act("login") }, "\u767B\u5F55 ChatGPT \u8D26\u53F7"),
-    data?.verificationUrl ? (0, import_react.createElement)(
+    pending ? (0, import_react.createElement)(
       "p",
       null,
       "\u8BF7\u6253\u5F00 ",
       (0, import_react.createElement)("a", { href: data.verificationUrl, target: "_blank", rel: "noreferrer" }, data.verificationUrl),
       "\uFF0C\u8F93\u5165\u8BBE\u5907\u7801 ",
       (0, import_react.createElement)("b", null, data.userCode)
-    ) : null,
+    ) : (0, import_react.createElement)("p", null, statusText),
+    connected ? (0, import_react.createElement)("button", { type: "button", onClick: () => act("logout") }, "\u767B\u51FA") : (0, import_react.createElement)("button", { type: "button", onClick: () => act("login") }, "\u767B\u5F55 ChatGPT \u8D26\u53F7"),
     connected && data?.expiresAt ? (0, import_react.createElement)("p", null, "access token \u5230\u671F\uFF1A", new Date(data.expiresAt).toLocaleString()) : null
   );
 }

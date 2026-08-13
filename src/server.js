@@ -62,7 +62,7 @@ function statusPayload(state, credential) {
       return {
         ok: true,
         connected: false,
-        statusText: `等待授权：请在浏览器打开 ${state.verificationUri}，输入设备码 ${state.userCode}`,
+        statusText: '等待授权',
         verificationUrl: state.verificationUri ?? '',
         userCode: state.userCode ?? '',
       }

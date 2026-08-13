@@ -39,20 +39,23 @@ function CodexSection() {
 
   const connected = data?.connected === true
   const statusText = data?.statusText ?? '加载中…'
+  // A single status line: pending (waiting for authorization) shows only the
+  // actionable URL + device code; otherwise the plain status text. Re-clicking
+  // login replaces `data`, so the prompt overwrites instead of stacking.
+  const pending = !connected && data?.verificationUrl
 
   return h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
-    h('p', null, statusText),
-    connected
-      ? h('button', { type: 'button', onClick: () => act('logout') }, '登出')
-      : h('button', { type: 'button', onClick: () => act('login') }, '登录 ChatGPT 账号'),
-    data?.verificationUrl
+    pending
       ? h('p', null,
         '请打开 ',
         h('a', { href: data.verificationUrl, target: '_blank', rel: 'noreferrer' }, data.verificationUrl),
         '，输入设备码 ',
         h('b', null, data.userCode),
       )
-      : null,
+      : h('p', null, statusText),
+    connected
+      ? h('button', { type: 'button', onClick: () => act('logout') }, '登出')
+      : h('button', { type: 'button', onClick: () => act('login') }, '登录 ChatGPT 账号'),
     connected && data?.expiresAt
       ? h('p', null, 'access token 到期：', new Date(data.expiresAt).toLocaleString())
       : null,
