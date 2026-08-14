@@ -42,7 +42,9 @@ node scripts/install.mjs            # installs into the web profile by default
 node scripts/install.mjs headless   # or another profile name
 ```
 
-It auto-locates `$DSH_HOME` (default `~/.dsh`), copies the plugin into the profile's `node_modules`, and adds the bundle entry — no pnpm involved. On Windows, run the same command in cmd or PowerShell; the plugin itself is pure Node and does not depend on bash or pwsh.
+It auto-locates `$DSH_HOME` (default `~/.dsh`), copies the plugin into the `node_modules` location DSH will actually resolve first, and adds the bundle entry — no pnpm involved. On Windows, run the same command in cmd or PowerShell; the plugin itself is pure Node and does not depend on bash or pwsh.
+
+Stop the target dsh process before updating an existing installation, then run the same command again. The script detects both script-managed shared installs and profile-local pnpm installs, stages a rollback-capable replacement beside the target, and removes a duplicate copy that could shadow the refreshed package. OAuth credentials live in `$DSH_HOME/.credentials.yaml`; refreshing the plugin directory does not read, move, or delete them.
 
 The matching uninstall script:
 
@@ -83,7 +85,11 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 
 After installing, `dsh --profile web --dump-config` (or `npx @deepseek-ai/dsh --profile web --dump-config`) should show the `llm-codex-oauth` row.
 
-> **Updating plugin code**: a `file:` install is a hard-link snapshot, so an editor's replace-style write is invisible to pnpm and a plain re-`add` does not refresh it. Bump `package.json`'s version first, then fully reinstall and restart dsh:
+> **Updating plugin code**: a `file:` install is a hard-link snapshot, so an editor's replace-style write is invisible to pnpm and a plain re-`add` may not refresh it. Prefer stopping dsh and running the repository installer; it refreshes the package location that is actually active and does not require repeated version bumps during local iteration:
+> ```sh
+> node scripts/install.mjs
+> ```
+> If you use pnpm exclusively, perform a complete remove/add instead:
 > ```sh
 > dsh plugin --profile web remove dsh-llm-codex-oauth
 > dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
@@ -113,6 +119,7 @@ After installing, `dsh --profile web --dump-config` (or `npx @deepseek-ai/dsh --
 - Plain ESM JavaScript; the host half needs no build step (named exports `apply` / `inject` / `name`).
 - The browser half is bundled with esbuild: `node build.mjs` (React is externalized to `require("react")`, reusing the host's React instance).
 - `dsh.bundle.patch` points at `cordis.patch.yml`; `dsh plugin add` adds the plugin to the profile's bundle layer automatically.
+- `npm test` verifies repeated installs, profile-local pnpm snapshot refresh, unchanged credentials, and profile-path validation in temporary `DSH_HOME` trees; it needs no network or real credential.
 - Tests live in `test/`: `smoke.mjs` (provider route / HTTP endpoints / commands / credential store), `stream-test.mjs` (stream translation, replay, error classification, option assembly, incl. multi-turn replay regressions), `login-smoke.mjs` (live device-flow smoke test, no account involved). They resolve dependencies through the profile's dependency tree; drop them into an installed profile directory and run:
   ```sh
   cp test/*.mjs .testhome/profiles/codex-test2/ && cd .testhome/profiles/codex-test2

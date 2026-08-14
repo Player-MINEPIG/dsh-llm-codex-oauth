@@ -1,6 +1,6 @@
 {
   "name": "dsh-llm-codex-oauth",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Use your ChatGPT/Codex subscription in dsh through the OpenAI Codex OAuth flow.",
   "type": "module",
   "main": "src/index.js",
@@ -26,6 +26,9 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
+  },
+  "scripts": {
+    "test": "node --test test/install-script.test.mjs"
   },
   "license": "MIT",
   "dependencies": {

@@ -42,7 +42,9 @@ node scripts/install.mjs            # 默认装到 web profile
 node scripts/install.mjs headless   # 指定其他 profile
 ```
 
-脚本会自动定位 `$DSH_HOME`（默认 `~/.dsh`），把插件复制进 profile 的 `node_modules` 并写入 bundle 列表，全程不碰 pnpm。Windows 上在 cmd / PowerShell 里直接运行同一命令即可，插件本身是纯 Node 实现，不依赖 bash / pwsh。
+脚本会自动定位 `$DSH_HOME`（默认 `~/.dsh`），把插件复制进 DSH 实际优先解析的 `node_modules` 并写入 bundle 列表，全程不碰 pnpm。Windows 上在 cmd / PowerShell 里直接运行同一命令即可，插件本身是纯 Node 实现，不依赖 bash / pwsh。
+
+更新已有安装前先停止对应的 dsh 进程，然后重复运行同一命令。脚本会识别脚本管理的共享安装和 profile 内由 pnpm 管理的安装，在目标旁完成暂存与可回滚替换，并删除会遮蔽新版的重复副本。OAuth 凭据位于 `$DSH_HOME/.credentials.yaml`，刷新插件目录不会读取、移动或删除凭据。
 
 对应的卸载脚本：
 
@@ -84,7 +86,12 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 安装后 `dsh --profile web --dump-config`（或 `npx @deepseek-ai/dsh --profile web --dump-config`）应能看到 `llm-codex-oauth` 行。
 
 > **更新插件代码**：`file:` 安装是硬链接快照，编辑器替换式写入不会被 pnpm 感知，直接重跑
-> `add` 不会刷新。请先 bump `package.json` 的 version，再完整重装并重启 dsh：
+> `add` 可能不会刷新。推荐先停止 dsh，再从仓库运行一键脚本；它会刷新当前真正生效的安装位置，
+> 不需要为本地迭代反复 bump version：
+> ```sh
+> node scripts/install.mjs
+> ```
+> 如果坚持只使用 pnpm，则必须完整 remove/add：
 > ```sh
 > dsh plugin --profile web remove dsh-llm-codex-oauth
 > dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
@@ -114,6 +121,7 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 - 纯 ESM JavaScript；宿主半无构建步骤（命名导出 `apply` / `inject` / `name`）。
 - 浏览器半用 esbuild 打包：`node build.mjs`（React 外部化为 `require("react")`，复用宿主实例）。
 - `dsh.bundle.patch` 指向 `cordis.patch.yml`，`dsh plugin add` 安装后自动加入 profile 的 bundle 层。
+- `npm test` 在临时 `DSH_HOME` 中验证重复安装、pnpm 内层快照刷新、凭据不变和 profile 路径校验，无需网络或真实凭据。
 - 测试套件在 `test/`：`smoke.mjs`（provider 路由 / HTTP 端点 / 命令 / 凭据库）、`stream-test.mjs`（流翻译、回放、错误分类、选项装配，含多轮回放回归用例）、`login-smoke.mjs`（设备码流联网冒烟，不涉及账号）。它们通过 profile 依赖树解析依赖，放进已安装本插件的 profile 目录运行：
   ```sh
   cp test/*.mjs .testhome/profiles/codex-test2/ && cd .testhome/profiles/codex-test2
