@@ -34,6 +34,9 @@ var import_react = require("react");
 var SECTION_ID = "codex-oauth";
 function CodexSection() {
   const [data, setData] = (0, import_react.useState)(null);
+  const [proxyUrl, setProxyUrl] = (0, import_react.useState)("");
+  const [proxyDirty, setProxyDirty] = (0, import_react.useState)(false);
+  const [proxyMessage, setProxyMessage] = (0, import_react.useState)("");
   const refresh = (0, import_react.useCallback)(async () => {
     try {
       const response = await fetch("/codex-oauth/status");
@@ -47,6 +50,9 @@ function CodexSection() {
     const timer = setInterval(refresh, 3e3);
     return () => clearInterval(timer);
   }, [refresh]);
+  (0, import_react.useEffect)(() => {
+    if (!proxyDirty && typeof data?.proxyUrl === "string") setProxyUrl(data.proxyUrl);
+  }, [data?.proxyUrl, proxyDirty]);
   const act = (0, import_react.useCallback)(async (operation) => {
     try {
       await fetch(`/codex-oauth/${operation}`, { method: "POST" });
@@ -57,6 +63,24 @@ function CodexSection() {
   const connected = data?.connected === true;
   const statusText = data?.statusText ?? "\u52A0\u8F7D\u4E2D\u2026";
   const pending = !connected && data?.verificationUrl;
+  const updateProxy = (0, import_react.useCallback)(async (enabled) => {
+    setProxyMessage("\u4FDD\u5B58\u4E2D\u2026");
+    try {
+      const response = await fetch("/codex-oauth/proxy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled, proxyUrl })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      setData(result);
+      setProxyDirty(false);
+      setProxyMessage(enabled ? `\u4EE3\u7406\u5DF2\u542F\u7528\uFF1A${result.proxyDisplayUrl}` : "\u4EE3\u7406\u5DF2\u5173\u95ED\uFF0C\u5F53\u524D\u4F7F\u7528\u76F4\u8FDE");
+    } catch (error) {
+      setProxyMessage(error instanceof Error ? error.message : String(error));
+      await refresh();
+    }
+  }, [proxyUrl, refresh]);
   return (0, import_react.createElement)(
     "div",
     { style: { display: "flex", flexDirection: "column", gap: "8px" } },
@@ -69,7 +93,34 @@ function CodexSection() {
       (0, import_react.createElement)("b", null, data.userCode)
     ) : (0, import_react.createElement)("p", null, statusText),
     connected ? (0, import_react.createElement)("button", { type: "button", onClick: () => act("logout") }, "\u767B\u51FA") : (0, import_react.createElement)("button", { type: "button", onClick: () => act("login") }, "\u767B\u5F55 ChatGPT \u8D26\u53F7"),
-    connected && data?.expiresAt ? (0, import_react.createElement)("p", null, "access token \u5230\u671F\uFF1A", new Date(data.expiresAt).toLocaleString()) : null
+    connected && data?.expiresAt ? (0, import_react.createElement)("p", null, "access token \u5230\u671F\uFF1A", new Date(data.expiresAt).toLocaleString()) : null,
+    (0, import_react.createElement)("hr", { style: { width: "100%", border: 0, borderTop: "1px solid #ddd" } }),
+    (0, import_react.createElement)(
+      "label",
+      { style: { display: "flex", alignItems: "center", gap: "8px" } },
+      (0, import_react.createElement)("input", {
+        type: "checkbox",
+        checked: data?.proxyEnabled === true,
+        onChange: (event) => updateProxy(event.target.checked)
+      }),
+      "\u4F7F\u7528 HTTP(S) \u4EE3\u7406\uFF08\u53EF\u9009\uFF09"
+    ),
+    (0, import_react.createElement)(
+      "div",
+      { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+      (0, import_react.createElement)("input", {
+        type: "url",
+        value: proxyUrl,
+        placeholder: "http://127.0.0.1:7897",
+        onChange: (event) => {
+          setProxyUrl(event.target.value);
+          setProxyDirty(true);
+        },
+        style: { minWidth: "260px", flex: "1 1 260px" }
+      }),
+      (0, import_react.createElement)("button", { type: "button", onClick: () => updateProxy(data?.proxyEnabled === true) }, "\u4FDD\u5B58\u4EE3\u7406\u5730\u5740")
+    ),
+    proxyMessage ? (0, import_react.createElement)("p", null, proxyMessage) : null
   );
 }
 var name = "dsh-llm-codex-oauth";

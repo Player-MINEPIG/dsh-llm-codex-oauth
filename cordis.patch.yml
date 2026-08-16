@@ -16,3 +16,6 @@
         credentialRef: OPENAI_CODEX_OAUTH
         # Per-chunk idle timeout before the stream is aborted, in milliseconds.
         streamIdleTimeoutMs: 300000
+        # Optional HTTP(S) proxy used only for auth.openai.com and chatgpt.com.
+        # Example: http://127.0.0.1:7897
+        # proxyUrl: http://127.0.0.1:7897

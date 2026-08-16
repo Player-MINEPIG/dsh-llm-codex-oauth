@@ -463,19 +463,22 @@ export class CodexAdapter extends LlmAdapter {
   #providerId
   #provider
   #streamIdleTimeoutMs
+  #forceSse
 
   /**
    * @param models - pi-ai Models collection carrying the codex provider and the DshCredentialStore.
    * @param providerId - pi-ai catalog provider id (openai-codex).
    * @param provider - dsh provider route (codex-oauth), recorded in replay state.
    * @param options.streamIdleTimeoutMs - per-chunk idle timeout.
+   * @param options.forceSse - boolean/function disabling WebSocket while an HTTP proxy is active.
    */
-  constructor(models, providerId, provider, { streamIdleTimeoutMs = DEFAULT_STREAM_IDLE_TIMEOUT_MS } = {}) {
+  constructor(models, providerId, provider, { streamIdleTimeoutMs = DEFAULT_STREAM_IDLE_TIMEOUT_MS, forceSse = false } = {}) {
     super()
     this.#models = models
     this.#providerId = providerId
     this.#provider = provider
     this.#streamIdleTimeoutMs = streamIdleTimeoutMs
+    this.#forceSse = forceSse
   }
 
   providerInfo(provider) {
@@ -524,6 +527,7 @@ export class CodexAdapter extends LlmAdapter {
           ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
           ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
           ...(options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) }),
+          ...((typeof this.#forceSse === 'function' ? this.#forceSse() : this.#forceSse) ? { transport: 'sse' } : {}),
           signal: watchdog.signal,
           headers: attributionHeaders(),
         }),

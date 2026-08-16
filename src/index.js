@@ -20,6 +20,7 @@ import { CodexAdapter } from './adapter.js'
 import { LoginManager } from './login.js'
 import { installCommands } from './commands.js'
 import { installServerRoutes } from './server.js'
+import { ProxySettings } from './proxy-settings.js'
 
 export const name = 'dsh-llm-codex-oauth'
 
@@ -31,6 +32,7 @@ const DEFAULTS = {
   providerId: 'openai-codex',
   credentialRef: 'OPENAI_CODEX_OAUTH',
   streamIdleTimeoutMs: 300000,
+  proxyUrl: undefined,
 }
 
 /**
@@ -42,6 +44,7 @@ export function apply(ctx, config) {
   const providerId = config?.providerId ?? DEFAULTS.providerId
   const credentialRef = config?.credentialRef ?? DEFAULTS.credentialRef
   const streamIdleTimeoutMs = config?.streamIdleTimeoutMs ?? DEFAULTS.streamIdleTimeoutMs
+  const proxyUrl = config?.proxyUrl ?? DEFAULTS.proxyUrl
 
   const catalogProvider = builtinProviders().find((entry) => entry.id === providerId)
   if (catalogProvider === undefined) {
@@ -54,11 +57,19 @@ export function apply(ctx, config) {
   const models = createModels({ credentials: store })
   models.setProvider(catalogProvider)
 
-  ctx.llm.registerAdapter([provider], new CodexAdapter(models, providerId, provider, { streamIdleTimeoutMs }))
+  // Node does not inherit macOS system proxy settings. Install a scoped fetch
+  // wrapper before any OAuth or model request, and force SSE because Node's
+  // built-in WebSocket transport cannot accept an http.Agent proxy.
+  const proxy = new ProxySettings(ctx, proxyUrl)
+
+  ctx.llm.registerAdapter([provider], new CodexAdapter(models, providerId, provider, {
+    streamIdleTimeoutMs,
+    forceSse: () => proxy.enabled,
+  }))
 
   const login = new LoginManager(ctx, models, providerId)
-  installServerRoutes(ctx, login, store, providerId)
+  installServerRoutes(ctx, login, store, providerId, proxy)
   installCommands(ctx, login, store, providerId)
 
-  ctx.logger.info(`dsh-llm-codex-oauth: provider "${provider}" ready (pi-ai ${providerId}; credential ${credentialRef})`)
+  ctx.logger.info(`dsh-llm-codex-oauth: provider "${provider}" ready (pi-ai ${providerId}; credential ${credentialRef}${proxy.enabled ? `; proxy ${proxy.displayUrl}; transport sse` : ''})`)
 }
