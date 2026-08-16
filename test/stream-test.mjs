@@ -18,18 +18,36 @@ function check(label, ok, detail = '') {
 
 const codex = builtinProviders().find((p) => p.id === 'openai-codex')
 const model = codex.getModels().find((m) => m.id === 'gpt-5.3-codex-spark')
+const vision = codex.getModels().find((m) => Array.isArray(m.input) && m.input.includes('image'))
+if (vision === undefined) {
+  console.error('FAIL  openai-codex catalog has no model with image input')
+  process.exit(1)
+}
 
-function makeAdapter(eventsFactory) {
+const PNG_BYTES = Uint8Array.from([0x89, 0x50, 0x4e, 0x47])
+const PNG_B64 = Buffer.from(PNG_BYTES).toString('base64')
+const pngAttachment = { attachmentId: 'img-1', mediaType: 'image/png', bytes: PNG_BYTES.byteLength, width: 1, height: 1 }
+
+function mockAttachments() {
+  return {
+    readImage: async (ref) => ({ ref: { ...pngAttachment, ...ref }, data: PNG_BYTES }),
+  }
+}
+
+function makeAdapter(eventsFactory, { catalogModel = model, resolveAttachments } = {}) {
   let captured
   const models = {
-    getModel: (_pid, mid) => (mid === model.id ? model : undefined),
-    getModels: () => [model],
+    getModel: (_pid, mid) => (mid === catalogModel.id ? catalogModel : undefined),
+    getModels: () => [catalogModel],
     streamSimple: (m, context, opts) => {
       captured = { m, context, opts }
       return eventsFactory()
     },
   }
-  const adapter = new CodexAdapter(models, 'openai-codex', 'codex-oauth', { streamIdleTimeoutMs: 5000 })
+  const adapter = new CodexAdapter(models, 'openai-codex', 'codex-oauth', {
+    streamIdleTimeoutMs: 5000,
+    resolveAttachments,
+  })
   return { adapter, getCaptured: () => captured }
 }
 
@@ -113,6 +131,24 @@ async function* error401Events() {
   check('T2 error finish classified AUTH', finish?.reason?.kind === 'error' && finish?.reason?.failure?.code === 'AUTH', JSON.stringify(finish?.reason?.failure))
 }
 
+async function* unsupportedParamEvents() {
+  yield { type: 'start', partial: null }
+  yield {
+    type: 'error',
+    error: {
+      api: 'openai-codex-responses', provider: 'openai-codex', model: model.id,
+      stopReason: 'error', errorMessage: 'Codex error: Unsupported parameter: temperature',
+      content: [], usage: { input: 1, output: 0 },
+    },
+  }
+}
+{
+  const { adapter } = makeAdapter(unsupportedParamEvents)
+  const chunks = await collect(adapter, baseOptions())
+  const finish = chunks.find((c) => c.type === 'finish')
+  check('T2b unsupported parameter classified INVALID_REQUEST', finish?.reason?.kind === 'error' && finish?.reason?.failure?.code === 'INVALID_REQUEST', JSON.stringify(finish?.reason?.failure))
+}
+
 // ── T3: stream ends without terminal event ──────────────────────────────────
 async function* truncatedEvents() {
   yield { type: 'start', partial: null }
@@ -129,7 +165,7 @@ async function* truncatedEvents() {
   check('T3 truncated stream throws STREAM_CLOSED', closedOk)
 }
 
-// ── T4: option assembly (headers / reasoning / passthrough) ─────────────────
+// ── T4: option assembly (headers / reasoning / Codex-safe sampling) ─────────
 async function* tinyEvents() {
   yield { type: 'start', partial: null }
   yield { type: 'text_start', contentIndex: 0 }
@@ -150,7 +186,9 @@ async function* tinyEvents() {
   const { context, opts } = getCaptured()
   check('T4 headers include attribution', typeof opts.headers === 'object' && opts.headers !== null && Object.keys(opts.headers).length > 0, JSON.stringify(Object.keys(opts.headers ?? {})))
   check('T4 reasoning passed', opts.reasoning === 'high')
-  check('T4 temperature/maxTokens/sessionId passthrough', opts.temperature === 0.5 && opts.maxTokens === 1000 && opts.sessionId === 'sess-1')
+  check('T4 sessionId passed', opts.sessionId === 'sess-1')
+  check('T4 temperature omitted', !Object.hasOwn(opts, 'temperature'), JSON.stringify(opts.temperature))
+  check('T4 maxTokens omitted', !Object.hasOwn(opts, 'maxTokens'), JSON.stringify(opts.maxTokens))
   check('T4 abort signal passed', opts.signal instanceof AbortSignal)
   check('T4 system prompt mapped', context.systemPrompt === 'sys prompt')
   check('T4 tools mapped', context.tools?.length === 1 && context.tools[0].name === 'read' && context.tools[0].parameters?.type === 'object')
@@ -186,19 +224,117 @@ async function* tinyEvents() {
   check('T5 replayed text keeps signature', replayed?.content?.[0]?.type === 'text' && replayed?.content?.[0]?.text === 'earlier answer' && replayed?.content?.[0]?.textSignature === 'sig-prev')
 }
 
-// ── T6: image input refused ─────────────────────────────────────────────────
+// ── T6: image input — catalog gate, attachment store, conversion ────────────
 {
-  const { adapter } = makeAdapter(tinyEvents)
-  let refused = false
+  const textOnly = { ...model, input: ['text'] }
+  const { adapter } = makeAdapter(tinyEvents, { catalogModel: textOnly })
+  let code = ''
+  let message = ''
   try {
     await collect(adapter, {
-      provider: 'codex-oauth', model: model.id,
-      messages: [{ role: 'user', content: [{ type: 'image', attachment: { id: 'img-1' } }] }],
+      provider: 'codex-oauth',
+      model: textOnly.id,
+      messages: [{ role: 'user', content: [{ type: 'image', attachment: pngAttachment }] }],
     })
   } catch (error) {
-    refused = error instanceof LlmError && error.failure?.code === 'UNSUPPORTED_CONTENT'
+    code = error instanceof LlmError ? error.failure?.code : ''
+    message = error instanceof LlmError ? error.message : String(error)
   }
-  check('T6 image input refused with UNSUPPORTED_CONTENT', refused)
+  check('T6a text-only catalog model refuses image', code === 'UNSUPPORTED_CONTENT' && message.includes(textOnly.id), `${code}:${message}`)
+}
+
+{
+  const { adapter } = makeAdapter(tinyEvents, { catalogModel: vision })
+  let code = ''
+  let message = ''
+  try {
+    await collect(adapter, {
+      provider: 'codex-oauth',
+      model: vision.id,
+      messages: [{ role: 'user', content: [{ type: 'image', attachment: pngAttachment }] }],
+    })
+  } catch (error) {
+    code = error instanceof LlmError ? error.failure?.code : ''
+    message = error instanceof LlmError ? error.message : String(error)
+  }
+  check('T6b vision model without attachment store refuses', code === 'UNSUPPORTED_CONTENT' && /attachment service/i.test(message), `${code}:${message}`)
+}
+
+{
+  const { adapter, getCaptured } = makeAdapter(tinyEvents, {
+    catalogModel: vision,
+    resolveAttachments: mockAttachments,
+  })
+  await collect(adapter, {
+    provider: 'codex-oauth',
+    model: vision.id,
+    messages: [{ role: 'user', content: [{ type: 'image', attachment: pngAttachment }] }],
+  })
+  const user = getCaptured().context.messages?.[0]
+  const image = Array.isArray(user?.content) ? user.content.find((block) => block.type === 'image') : undefined
+  check('T6c vision model maps attachment to pi-ai image', image?.type === 'image' && image?.data === PNG_B64 && image?.mimeType === 'image/png', JSON.stringify(user?.content))
+}
+
+{
+  const { adapter, getCaptured } = makeAdapter(tinyEvents, {
+    catalogModel: vision,
+    resolveAttachments: mockAttachments,
+  })
+  await collect(adapter, {
+    provider: 'codex-oauth',
+    model: vision.id,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'what is this' },
+          { type: 'image', attachment: pngAttachment },
+        ],
+      },
+    ],
+  })
+  const content = getCaptured().context.messages?.[0]?.content
+  check(
+    'T6d mixed text+image keeps block order',
+    Array.isArray(content) && content[0]?.type === 'text' && content[0]?.text === 'what is this' && content[1]?.type === 'image' && content[1]?.data === PNG_B64,
+    JSON.stringify(content),
+  )
+}
+
+{
+  const { adapter, getCaptured } = makeAdapter(tinyEvents, {
+    catalogModel: vision,
+    resolveAttachments: mockAttachments,
+  })
+  await collect(adapter, {
+    provider: 'codex-oauth',
+    model: vision.id,
+    messages: [
+      { role: 'assistant', source: { kind: 'user' }, content: [{ type: 'tool-call', id: 'call_1', name: 'read_image', arguments: '{}' }] },
+      { role: 'user', content: [{ type: 'tool-result', toolCallId: 'call_1', content: [{ type: 'image', attachment: pngAttachment }] }] },
+    ],
+  })
+  const result = getCaptured().context.messages?.find((message) => message.role === 'toolResult')
+  const image = result?.content?.find((block) => block.type === 'image')
+  check('T6e nested tool-result image is forwarded', result?.toolName === 'read_image' && image?.data === PNG_B64 && image?.mimeType === 'image/png', JSON.stringify(result))
+}
+
+{
+  const { adapter } = makeAdapter(tinyEvents, {
+    catalogModel: vision,
+    resolveAttachments: mockAttachments,
+  })
+  let code = ''
+  try {
+    await collect(adapter, {
+      provider: 'codex-oauth',
+      model: vision.id,
+      messages: [{ role: 'system', content: [{ type: 'image', attachment: pngAttachment }] }],
+    })
+  } catch (error) {
+    code = error instanceof LlmError ? error.failure?.code : ''
+  }
+  check('T6f in-history system image is refused', code === 'UNSUPPORTED_CONTENT', code)
 }
 
 // ── T7: unsupported reasoning effort ────────────────────────────────────────
@@ -274,6 +410,18 @@ async function* tinyEvents() {
   const replayed = getCaptured().context.messages?.[1]
   check('T9 legacy catalog-id replay accepted', replayed?.provider === 'openai-codex' && replayed?.api === 'openai-codex-responses')
   check('T9 legacy text keeps signature', replayed?.content?.[0]?.textSignature === 'sig-legacy')
+}
+
+// ── T10: stop is refused; temperature/maxTokens must not reach the backend ──
+{
+  const { adapter } = makeAdapter(tinyEvents)
+  let refused = false
+  try {
+    await collect(adapter, { ...baseOptions(), stop: ['END'] })
+  } catch (error) {
+    refused = error instanceof LlmError && error.failure?.code === 'UNSUPPORTED_OPTION'
+  }
+  check('T10 GenerateOptions.stop refused', refused)
 }
 
 if (failed > 0) {

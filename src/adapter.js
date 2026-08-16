@@ -12,7 +12,15 @@
  * become StreamChunks, failures arrive as terminal `error` events, and the
  * finish chunk carries adapter-private replay state so later turns can
  * reconstruct provider-native assistant messages (signatures) for the
- * ChatGPT backend.
+ * ChatGPT backend. Durable image attachments are resolved through the host
+ * attachment store into pi-ai ImageContent (base64 + mimeType) the same way
+ * llm-pi-ai does; image generation is intentionally out of scope.
+ *
+ * Codex ChatGPT (`openai-codex-responses`) rejects sampling knobs the DSH
+ * seam still carries (`temperature`, `maxTokens` → `max_output_tokens`,
+ * `stop`). `stop` is refused up front; temperature and maxTokens are omitted
+ * so presets (e.g. dsh-tavern) do not 400 the turn. Reasoning effort and
+ * sessionId remain on the wire.
  *
  * @module dsh-llm-codex-oauth/adapter
  */
@@ -55,6 +63,43 @@ function toolResultText(blocks) {
   return blocks
     .map((block) => (block.type === 'text' ? block.text : block.type === 'tool-result' ? toolResultText(block.content) : ''))
     .join('')
+}
+
+/**
+ * Resolve one user/tool-result content list into pi-ai text and/or images.
+ * All-text collapses to a string so the text-only contract stays byte-stable.
+ */
+async function userContent(blocks, attachments, signal) {
+  const content = []
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'text':
+        if (block.text.length > 0) content.push({ type: 'text', text: block.text })
+        break
+      case 'image': {
+        const stored = await attachments.readImage(block.attachment, signal)
+        content.push({
+          type: 'image',
+          data: Buffer.from(stored.data).toString('base64'),
+          mimeType: stored.ref.mediaType,
+        })
+        break
+      }
+      case 'tool-result': {
+        const nested = await userContent(block.content, attachments, signal)
+        if (typeof nested === 'string') {
+          if (nested.length > 0) content.push({ type: 'text', text: nested })
+        } else {
+          content.push(...nested)
+        }
+        break
+      }
+      default:
+        break
+    }
+  }
+  if (content.every((piece) => piece.type === 'text')) return content.map((piece) => piece.text).join('')
+  return content
 }
 
 function toolsOf(options) {
@@ -228,12 +273,12 @@ function toPiAssistant(message, providerId) {
     : replayedAssistant(message, source, source.replayState, providerId)
 }
 
-/** Text-only harness history conversion (image input is refused for now). */
+/** Text-only harness history conversion. Images must take the attachment path. */
 function textOnlyContext(options, providerId) {
   const toolNames = new Map()
   const messages = []
   for (const message of options.messages) {
-    if (contentHasImage(message.content)) throw new LlmError('codex-oauth image input is not supported yet', 'UNSUPPORTED_CONTENT')
+    if (contentHasImage(message.content)) throw new LlmError('codex-oauth image conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
     if (message.role === 'system') {
       messages.push({ role: 'user', content: flattenText(message), timestamp: 0 })
       continue
@@ -261,6 +306,41 @@ function textOnlyContext(options, providerId) {
   return piContext(options, messages)
 }
 
+/** Convert harness history while resolving durable image attachments. */
+async function toPiContextWithImages(options, attachments, providerId, signal) {
+  const toolNames = new Map()
+  const messages = []
+  for (const message of options.messages) {
+    if (message.role === 'system') {
+      if (contentHasImage(message.content)) throw new LlmError('codex-oauth cannot represent an image in an in-history system message', 'UNSUPPORTED_CONTENT')
+      messages.push({ role: 'user', content: flattenText(message), timestamp: 0 })
+      continue
+    }
+    if (message.role === 'assistant') {
+      const assistant = toPiAssistant(message, providerId)
+      for (const block of assistant.content) if (block.type === 'toolCall') toolNames.set(CallId(block.id), block.name)
+      messages.push(assistant)
+      continue
+    }
+    const regular = message.content.filter((block) => block.type !== 'tool-result')
+    const content = await userContent(regular, attachments, signal)
+    const results = message.content.filter((block) => block.type === 'tool-result')
+    if (content.length > 0 || results.length === 0) messages.push({ role: 'user', content, timestamp: 0 })
+    for (const result of results) {
+      const resultContent = await userContent(result.content, attachments, signal)
+      messages.push({
+        role: 'toolResult',
+        toolCallId: result.toolCallId,
+        toolName: toolNames.get(result.toolCallId) ?? 'unknown',
+        content: typeof resultContent === 'string' ? [{ type: 'text', text: resultContent || '(no output)' }] : resultContent,
+        isError: result.isError ?? false,
+        timestamp: 0,
+      })
+    }
+  }
+  return piContext(options, messages)
+}
+
 // ── stream translation ──────────────────────────────────────────────────────
 
 /** Map pi-ai usage into harness counts. */
@@ -278,7 +358,7 @@ function classifyError(message) {
   if (/\b(?:401|403)\b/.test(message)) return 'AUTH'
   if (isQuotaExceededError(message)) return QUOTA_EXCEEDED_CODE
   if (/\b429\b|rate.?limit/i.test(message)) return 'RATE_LIMIT'
-  if (/\b400\b|invalid.?request/i.test(message)) return 'INVALID_REQUEST'
+  if (/\b400\b|invalid.?request|unsupported parameter/i.test(message)) return 'INVALID_REQUEST'
   if (/\b5\d\d\b/.test(message)) return 'SERVER'
   if (/\btime(?:d)?\s*out\b|timeout/i.test(message)) return 'TIMEOUT'
   if (/stream ended (?:before|without)\b/i.test(message)) return 'TRANSPORT'
@@ -463,19 +543,22 @@ export class CodexAdapter extends LlmAdapter {
   #providerId
   #provider
   #streamIdleTimeoutMs
+  #resolveAttachments
 
   /**
    * @param models - pi-ai Models collection carrying the codex provider and the DshCredentialStore.
    * @param providerId - pi-ai catalog provider id (openai-codex).
    * @param provider - dsh provider route (codex-oauth), recorded in replay state.
    * @param options.streamIdleTimeoutMs - per-chunk idle timeout.
+   * @param options.resolveAttachments - optional host attachment store resolver; required when a request carries images.
    */
-  constructor(models, providerId, provider, { streamIdleTimeoutMs = DEFAULT_STREAM_IDLE_TIMEOUT_MS } = {}) {
+  constructor(models, providerId, provider, { streamIdleTimeoutMs = DEFAULT_STREAM_IDLE_TIMEOUT_MS, resolveAttachments } = {}) {
     super()
     this.#models = models
     this.#providerId = providerId
     this.#provider = provider
     this.#streamIdleTimeoutMs = streamIdleTimeoutMs
+    this.#resolveAttachments = resolveAttachments
   }
 
   providerInfo(provider) {
@@ -517,12 +600,21 @@ export class CodexAdapter extends LlmAdapter {
     const upstream = options.signal === undefined ? consumer.signal : AbortSignal.any([options.signal, consumer.signal])
     const watchdog = idleWatchdog(upstream, this.#streamIdleTimeoutMs)
     try {
-      const context = textOnlyContext(options, this.#providerId)
+      const containsImage = options.messages.some((message) => contentHasImage(message.content))
+      if (containsImage && !model.input.includes('image')) {
+        throw new LlmError(`codex-oauth model "${model.id}" does not support image input`, 'UNSUPPORTED_CONTENT')
+      }
+      const attachments = containsImage ? this.#resolveAttachments?.() : undefined
+      if (containsImage && attachments === undefined) {
+        throw new LlmError('codex-oauth image input requires the durable attachment service', 'UNSUPPORTED_CONTENT')
+      }
+      const context =
+        attachments === undefined
+          ? textOnlyContext(options, this.#providerId)
+          : await toPiContextWithImages(options, attachments, this.#providerId, options.signal)
       const iterator = toStreamChunks(
         this.#models.streamSimple(model, context, {
           ...(reasoning === undefined ? {} : { reasoning }),
-          ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
-          ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
           ...(options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) }),
           signal: watchdog.signal,
           headers: attributionHeaders(),

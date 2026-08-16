@@ -26,6 +26,7 @@
 ## 功能特性
 
 - **订阅模型接入**：把 pi-ai 内置的 `openai-codex` provider（`openai-codex-responses` 线上协议）注册为 dsh LLM seam 的 `codex-oauth` 提供方；模型目录随所装 pi-ai 维护（如 `gpt-5.3-codex-spark`、`gpt-5.4`、`gpt-5.5`、`gpt-5.6-*` 等）。
+- **图片输入**：Web 粘贴或拖放走 dsh 耐久附件（PNG / JPEG / WebP / GIF）；仅目录声明 `image` 的模型会接收（多数 gpt-5.x；`gpt-5.3-codex-spark` 仍为纯文本）。`read_image` 等工具结果里的图也会转发到下一轮。
 - **OAuth 设备码登录**：走 `auth.openai.com`（与 Codex CLI 同一 OAuth client），headless 友好，无需本地回调服务器。
 - **凭据安全**：refresh / access token 只存在 dsh 凭据库 `$DSH_HOME/.credentials.yaml`（0600），**不进配置、不进会话日志、不进本仓库**；access token 过期时由 pi-ai 在串行化的写路径里自动用 refresh token 续期。
 - **设置页登录**：在设置页提供「Codex 订阅 (ChatGPT)」区块，含登录 / 登出按钮与实时状态；对话侧仅保留只读的 `/codex-status`、`/codex-logout` 命令。
@@ -109,7 +110,7 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 
 | 组件 | 说明 |
 |---|---|
-| `src/adapter.js` | `LlmAdapter` 实现：codex 流 → dsh `StreamChunk` 协议、签名回放、错误分类、空闲看门狗 |
+| `src/adapter.js` | `LlmAdapter` 实现：codex 流 → dsh `StreamChunk` 协议、签名回放、错误分类、空闲看门狗；用户/工具结果里的图片经 `ctx.attachments` 转成 pi-ai `ImageContent` |
 | `src/store.js` | pi-ai `CredentialStore` ↔ dsh 凭据库的桥（串行化读写，token 不出宿主） |
 | `src/login.js` | 设备码登录编排（pi-ai 官方流，自动持久化凭据） |
 | `src/server.js` | 宿主 `webServer` 挂 `/codex-oauth` HTTP 路由（status / login / logout），供浏览器半调用 |
@@ -122,12 +123,17 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 - 浏览器半用 esbuild 打包：`node build.mjs`（React 外部化为 `require("react")`，复用宿主实例）。
 - `dsh.bundle.patch` 指向 `cordis.patch.yml`，`dsh plugin add` 安装后自动加入 profile 的 bundle 层。
 - `npm test` 在临时 `DSH_HOME` 中验证重复安装、pnpm 内层快照刷新、凭据不变和 profile 路径校验，无需网络或真实凭据。
-- 测试套件在 `test/`：`smoke.mjs`（provider 路由 / HTTP 端点 / 命令 / 凭据库）、`stream-test.mjs`（流翻译、回放、错误分类、选项装配，含多轮回放回归用例）、`login-smoke.mjs`（设备码流联网冒烟，不涉及账号）。它们通过 profile 依赖树解析依赖，放进已安装本插件的 profile 目录运行：
+- 测试套件在 `test/`：`smoke.mjs`（provider 路由 / HTTP 端点 / 命令 / 凭据库）、`stream-test.mjs`（流翻译、回放、错误分类、选项装配、图片附件转换，含多轮回放回归用例）、`login-smoke.mjs`（设备码流联网冒烟，不涉及账号）。它们通过 profile 依赖树解析依赖，放进已安装本插件的 profile 目录运行：
   ```sh
   cp test/*.mjs .testhome/profiles/codex-test2/ && cd .testhome/profiles/codex-test2
   node smoke.mjs && node stream-test.mjs && node login-smoke.mjs
   ```
-- 已知限制：暂不支持图片输入；模型目录跟随所装 pi-ai 版本；登录状态（设备码）仅存于进程内存，重启后以凭据库为准。
+- 已知限制：
+  - Codex ChatGPT 后端不接受 `temperature`、`maxTokens`、`stop`。前两项会静默忽略（SillyTavern / dsh-tavern 预设几乎总会带温度）；`stop` 仍拒绝。`reasoningEffort` 与 `sessionId` 会继续下发。
+  - **不做图片生成。** Codex 生图走独立的 `/codex/images/generations` 与 `/edits`，不是对话流的一部分。有 ChatGPT / Codex 订阅时请直接用 Codex CLI / App，或安装更成熟、更通用的生图插件；本仓库只做订阅模型接入和看图。
+  - PDF / Office 等非图片不会作为多模态块发送；放入工作区后用文件工具读取。
+  - 看图需要 profile 挂载 `attachments`（web 默认有）；纯文本模型或未挂载附件服务时，图片请求会被拒绝。
+  - 模型目录跟随所装 pi-ai 版本；登录状态（设备码）仅存于进程内存，重启后以凭据库为准。
 
 ## 安全与合规
 

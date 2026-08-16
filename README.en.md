@@ -26,6 +26,7 @@ Use your **ChatGPT / Codex subscription** (Plus / Pro / Business / Edu) inside d
 ## Features
 
 - **Subscription models**: registers pi-ai's built-in `openai-codex` provider (`openai-codex-responses` wire protocol) as the `codex-oauth` provider on the dsh LLM seam. The model catalog is maintained by the installed pi-ai (e.g. `gpt-5.3-codex-spark`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-*`, …).
+- **Image input**: paste or drop images in the Web composer through dsh durable attachments (PNG / JPEG / WebP / GIF). Only catalog models that declare `image` receive them (most gpt-5.x; `gpt-5.3-codex-spark` stays text-only). Images nested in tool results such as `read_image` are forwarded on later turns.
 - **OAuth device-code login**: uses `auth.openai.com` (the same OAuth client as the Codex CLI), headless-friendly, no local callback server required.
 - **Credential safety**: refresh / access tokens live only in the dsh credential store `$DSH_HOME/.credentials.yaml` (0600) — never in config, never in session logs, never in this repository. Expired access tokens are refreshed automatically by pi-ai inside a serialized write path.
 - **Settings-page login**: provides a "Codex 订阅 (ChatGPT)" section with login / logout buttons and live status; the conversation side keeps only the read-only `/codex-status` and `/codex-logout` commands.
@@ -107,7 +108,7 @@ After installing, `dsh --profile web --dump-config` (or `npx @deepseek-ai/dsh --
 
 | Component | Purpose |
 |---|---|
-| `src/adapter.js` | `LlmAdapter` implementation: codex stream → dsh `StreamChunk` protocol, signature replay, error classification, idle watchdog |
+| `src/adapter.js` | `LlmAdapter` implementation: codex stream → dsh `StreamChunk` protocol, signature replay, error classification, idle watchdog; user/tool-result images resolved through `ctx.attachments` into pi-ai `ImageContent` |
 | `src/store.js` | Bridge between pi-ai's `CredentialStore` and the dsh credential store (serialized read/write, tokens never leave the host) |
 | `src/login.js` | Device-code login orchestration (pi-ai's own flow, persists the credential automatically) |
 | `src/server.js` | Host `webServer` routes under `/codex-oauth` (status / login / logout) for the browser half |
@@ -120,12 +121,17 @@ After installing, `dsh --profile web --dump-config` (or `npx @deepseek-ai/dsh --
 - The browser half is bundled with esbuild: `node build.mjs` (React is externalized to `require("react")`, reusing the host's React instance).
 - `dsh.bundle.patch` points at `cordis.patch.yml`; `dsh plugin add` adds the plugin to the profile's bundle layer automatically.
 - `npm test` verifies repeated installs, profile-local pnpm snapshot refresh, unchanged credentials, and profile-path validation in temporary `DSH_HOME` trees; it needs no network or real credential.
-- Tests live in `test/`: `smoke.mjs` (provider route / HTTP endpoints / commands / credential store), `stream-test.mjs` (stream translation, replay, error classification, option assembly, incl. multi-turn replay regressions), `login-smoke.mjs` (live device-flow smoke test, no account involved). They resolve dependencies through the profile's dependency tree; drop them into an installed profile directory and run:
+- Tests live in `test/`: `smoke.mjs` (provider route / HTTP endpoints / commands / credential store), `stream-test.mjs` (stream translation, replay, error classification, option assembly, image-attachment conversion, incl. multi-turn replay regressions), `login-smoke.mjs` (live device-flow smoke test, no account involved). They resolve dependencies through the profile's dependency tree; drop them into an installed profile directory and run:
   ```sh
   cp test/*.mjs .testhome/profiles/codex-test2/ && cd .testhome/profiles/codex-test2
   node smoke.mjs && node stream-test.mjs && node login-smoke.mjs
   ```
-- Known limitations: image input is not supported yet; the model catalog follows the installed pi-ai version; login state (device code) is process-memory only — after a restart the credential store is the source of truth.
+- Known limitations:
+  - The Codex ChatGPT backend rejects `temperature`, `maxTokens`, and `stop`. The first two are dropped silently (SillyTavern / dsh-tavern presets almost always set a temperature); `stop` is still refused. `reasoningEffort` and `sessionId` stay on the wire.
+  - **No image generation.** Codex image generation uses the separate `/codex/images/generations` and `/edits` endpoints, not the chat stream. If you have a ChatGPT / Codex subscription, generate images in Codex CLI / App, or install a more mature, general-purpose image-generation plugin. This repository only covers subscription model access and image *input*.
+  - Non-image files (PDF, Office, …) are not sent as multimodal blocks; put them in the workspace and use filesystem tools.
+  - Image input requires the profile's `attachments` service (present on the web profile by default). Text-only catalog models, or a profile without that store, refuse image requests.
+  - The model catalog follows the installed pi-ai version; login state (device code) is process-memory only — after a restart the credential store is the source of truth.
 
 ## Security & compliance
 

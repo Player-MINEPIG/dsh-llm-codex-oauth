@@ -54,7 +54,15 @@ export function apply(ctx, config) {
   const models = createModels({ credentials: store })
   models.setProvider(catalogProvider)
 
-  ctx.llm.registerAdapter([provider], new CodexAdapter(models, providerId, provider, { streamIdleTimeoutMs }))
+  // Attachments are optional: a profile without the durable store still serves
+  // text-only requests. Image turns resolve ctx.attachments at request time.
+  ctx.llm.registerAdapter(
+    [provider],
+    new CodexAdapter(models, providerId, provider, {
+      streamIdleTimeoutMs,
+      resolveAttachments: () => ctx.get('attachments'),
+    }),
+  )
 
   const login = new LoginManager(ctx, models, providerId)
   installServerRoutes(ctx, login, store, providerId)
