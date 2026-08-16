@@ -283,6 +283,17 @@ async function* tinyEvents() {
   check('T10 proxy mode forces SSE transport', getCaptured()?.opts?.transport === 'sse', String(getCaptured()?.opts?.transport))
 }
 
+// ── T11: runtime proxy switch controls SSE transport ───────────────────────
+{
+  let enabled = false
+  const { adapter, getCaptured } = makeAdapter(tinyEvents, { forceSse: () => enabled })
+  await collect(adapter, baseOptions())
+  check('T11 disabled runtime proxy keeps default transport', getCaptured()?.opts?.transport === undefined)
+  enabled = true
+  await collect(adapter, baseOptions())
+  check('T11 enabled runtime proxy forces SSE transport', getCaptured()?.opts?.transport === 'sse')
+}
+
 if (failed > 0) {
   console.error(`\n${failed} check(s) failed`)
   process.exit(1)

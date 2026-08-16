@@ -87,7 +87,9 @@ After installing, `dsh --profile web --dump-config` (or `npx @deepseek-ai/dsh --
 
 ### HTTP(S) proxy
 
-If ChatGPT works in the browser but device login reports `unsupported_country_region_territory`, the browser may be using a system proxy while the Node.js process running dsh still connects directly. Add a profile override in `$DSH_HOME/profiles/web/cordis.patch.yml`:
+If ChatGPT works in the browser but device login reports `unsupported_country_region_territory`, the browser may be using a system proxy while the Node.js process running dsh still connects directly. In the settings page's “Codex 订阅 (ChatGPT)” section, enable “使用 HTTP(S) 代理（可选）”, enter the proxy URL, and save. The change takes effect immediately and persists in `$DSH_HOME/codex-oauth-proxy.json`.
+
+You can also provide a first-run default in `$DSH_HOME/profiles/web/cordis.patch.yml`:
 
 ```yaml
 - id: llm-codex-oauth
@@ -95,7 +97,7 @@ If ChatGPT works in the browser but device login reports `unsupported_country_re
     proxyUrl: http://127.0.0.1:7897
 ```
 
-Restart `dsh web` to apply it. The plugin proxies only HTTPS requests to `auth.openai.com` and `chatgpt.com`. When enabled, model traffic is forced to SSE so login, token refresh, and inference all use the same HTTP(S) proxy. `http://` and `https://` proxy URLs are supported; SOCKS and PAC are not. Logs omit proxy usernames and passwords.
+The YAML default requires a `dsh web` restart; changes made in the settings page apply immediately. The plugin proxies only HTTPS requests to `auth.openai.com` and `chatgpt.com`. When enabled, model traffic is forced to SSE so login, token refresh, and inference all use the same HTTP(S) proxy. `http://` and `https://` proxy URLs are supported; SOCKS and PAC are not. Logs omit proxy usernames and passwords.
 
 > Proxy support is intended only to make Node.js use an explicitly configured, policy-compliant network path. It does not bypass OpenAI region or account policy. Use it only from a supported country or territory.
 

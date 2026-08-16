@@ -78,17 +78,38 @@ export function createCodexProxyFetch(proxyUrl, {
   }
 }
 
-/** Install the scoped fetch wrapper for the lifetime of one Cordis fiber. */
+/** Install a reconfigurable scoped fetch wrapper for one Cordis fiber. */
 export function installCodexProxy(ctx, proxyUrl) {
-  if (proxyUrl === undefined || proxyUrl === null || proxyUrl === '') {
-    return { enabled: false, displayUrl: undefined }
-  }
   const previous = globalThis.fetch
-  const proxy = createCodexProxyFetch(proxyUrl, { directFetch: previous })
-  globalThis.fetch = proxy.fetch
+  let proxy
+
+  const controller = {
+    get enabled() {
+      return proxy !== undefined
+    },
+    get displayUrl() {
+      return proxy?.displayUrl
+    },
+    setProxyUrl(value) {
+      const next = value === undefined || value === null || value === ''
+        ? undefined
+        : createCodexProxyFetch(value, { directFetch: previous })
+      if (proxy !== undefined) {
+        if (globalThis.fetch === proxy.fetch) globalThis.fetch = previous
+        proxy.close()
+      }
+      proxy = next
+      if (proxy !== undefined) globalThis.fetch = proxy.fetch
+    },
+  }
+
+  controller.setProxyUrl(proxyUrl)
   ctx.effect(() => () => {
-    if (globalThis.fetch === proxy.fetch) globalThis.fetch = previous
-    proxy.close()
+    if (proxy !== undefined) {
+      if (globalThis.fetch === proxy.fetch) globalThis.fetch = previous
+      proxy.close()
+      proxy = undefined
+    }
   })
-  return { enabled: true, displayUrl: proxy.displayUrl }
+  return controller
 }

@@ -45,10 +45,16 @@ function readJson(req) {
 }
 
 /** Map LoginManager state + stored credential to the client-facing payload. */
-function statusPayload(state, credential) {
+function statusPayload(state, credential, proxy) {
+  const proxyState = {
+    proxyEnabled: proxy.enabled,
+    proxyUrl: proxy.proxyUrl,
+    proxyDisplayUrl: proxy.displayUrl ?? '',
+  }
   if (credential !== undefined) {
     return {
       ok: true,
+      ...proxyState,
       connected: true,
       accountId: typeof credential.accountId === 'string' ? credential.accountId : '',
       expiresAt: credential.expires,
@@ -57,19 +63,20 @@ function statusPayload(state, credential) {
   }
   switch (state?.status) {
     case 'starting':
-      return { ok: true, connected: false, statusText: '登录启动中…' }
+      return { ok: true, ...proxyState, connected: false, statusText: '登录启动中…' }
     case 'pending':
       return {
         ok: true,
+        ...proxyState,
         connected: false,
         statusText: '等待授权',
         verificationUrl: state.verificationUri ?? '',
         userCode: state.userCode ?? '',
       }
     case 'failed':
-      return { ok: true, connected: false, statusText: `登录失败：${state.message ?? ''}` }
+      return { ok: true, ...proxyState, connected: false, statusText: `登录失败：${state.message ?? ''}` }
     default:
-      return { ok: true, connected: false, statusText: '未登录' }
+      return { ok: true, ...proxyState, connected: false, statusText: '未登录' }
   }
 }
 
@@ -78,7 +85,7 @@ function statusPayload(state, credential) {
  * absent (e.g. a headless profile), so the plugin keeps working there.
  * @returns the route disposer, or undefined when there is no web server.
  */
-export function installServerRoutes(ctx, login, store, providerId) {
+export function installServerRoutes(ctx, login, store, providerId, proxy) {
   const webServer = ctx.get('webServer')
   if (webServer === undefined) return undefined
 
@@ -92,22 +99,29 @@ export function installServerRoutes(ctx, login, store, providerId) {
 
         if (path === '/codex-oauth/status') {
           const credential = await store.read(providerId)
-          return sendJson(res, 200, statusPayload(login.state, credential))
+          return sendJson(res, 200, statusPayload(login.state, credential, proxy))
+        }
+
+        if (path === '/codex-oauth/proxy' && req.method === 'POST') {
+          const preference = await readJson(req)
+          proxy.update(preference)
+          const credential = await store.read(providerId)
+          return sendJson(res, 200, statusPayload(login.state, credential, proxy))
         }
 
         if (path === '/codex-oauth/login') {
           const credential = await store.read(providerId)
           if (credential !== undefined) {
-            return sendJson(res, 200, statusPayload(undefined, credential))
+            return sendJson(res, 200, statusPayload(undefined, credential, proxy))
           }
           login.start()
           const state = await login.waitState(30000)
-          return sendJson(res, 200, statusPayload(state, undefined))
+          return sendJson(res, 200, statusPayload(state, undefined, proxy))
         }
 
         if (path === '/codex-oauth/logout') {
           await login.logout()
-          return sendJson(res, 200, { ok: true, connected: false, statusText: '未登录' })
+          return sendJson(res, 200, statusPayload(undefined, undefined, proxy))
         }
 
         return sendJson(res, 404, { ok: false, error: 'not found' })

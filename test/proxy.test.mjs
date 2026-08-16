@@ -67,12 +67,27 @@ test('install restores the previous global fetch when the plugin is disposed', (
 
 test('proxy mode is disabled by default and leaves global fetch untouched', () => {
   const previous = globalThis.fetch
-  const ctx = {
-    effect() {
-      throw new Error('disabled proxy must not register a disposer')
-    },
-  }
+  let dispose
+  const ctx = { effect(callback) { dispose = callback() } }
   const installed = installCodexProxy(ctx, undefined)
   assert.equal(installed.enabled, false)
   assert.equal(globalThis.fetch, previous)
+  dispose()
+})
+
+test('proxy can be enabled and disabled at runtime', () => {
+  const previous = globalThis.fetch
+  let dispose
+  const ctx = { effect(callback) { dispose = callback() } }
+  const installed = installCodexProxy(ctx, undefined)
+  try {
+    installed.setProxyUrl('http://127.0.0.1:7897')
+    assert.equal(installed.enabled, true)
+    assert.notEqual(globalThis.fetch, previous)
+    installed.setProxyUrl(undefined)
+    assert.equal(installed.enabled, false)
+    assert.equal(globalThis.fetch, previous)
+  } finally {
+    dispose()
+  }
 })
