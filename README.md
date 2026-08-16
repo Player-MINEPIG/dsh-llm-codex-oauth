@@ -85,6 +85,20 @@ npx @deepseek-ai/dsh plugin --profile web add file:/path/to/dsh-llm-codex-oauth
 
 安装后 `dsh --profile web --dump-config`（或 `npx @deepseek-ai/dsh --profile web --dump-config`）应能看到 `llm-codex-oauth` 行。
 
+### HTTP(S) 代理
+
+浏览器能访问 ChatGPT、但登录时报 `unsupported_country_region_territory`，通常表示浏览器使用了系统代理，而运行 dsh 的 Node.js 进程仍在直连。可在 `$DSH_HOME/profiles/web/cordis.patch.yml` 中为本插件增加覆盖：
+
+```yaml
+- id: llm-codex-oauth
+  config:
+    proxyUrl: http://127.0.0.1:7897
+```
+
+重启 `dsh web` 后生效。插件只代理发往 `auth.openai.com` 和 `chatgpt.com` 的 HTTPS 请求；启用代理时模型请求固定使用 SSE，以确保登录、token 刷新和模型流量均经过同一 HTTP(S) 代理。支持 `http://` 和 `https://` 代理地址，不支持 SOCKS 或 PAC。日志只显示代理协议、主机和端口，不输出用户名或密码。
+
+> 代理功能仅用于让 Node.js 遵循用户明确配置的合法网络出口，不会绕过 OpenAI 的地区或账号策略。请只在 OpenAI 支持的国家和地区使用。
+
 > **更新插件代码**：`file:` 安装是硬链接快照，编辑器替换式写入不会被 pnpm 感知，直接重跑
 > `add` 可能不会刷新。推荐先停止 dsh，再从仓库运行一键脚本；它会刷新当前真正生效的安装位置，
 > 不需要为本地迭代反复 bump version：

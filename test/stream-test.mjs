@@ -19,7 +19,7 @@ function check(label, ok, detail = '') {
 const codex = builtinProviders().find((p) => p.id === 'openai-codex')
 const model = codex.getModels().find((m) => m.id === 'gpt-5.3-codex-spark')
 
-function makeAdapter(eventsFactory) {
+function makeAdapter(eventsFactory, adapterOptions = {}) {
   let captured
   const models = {
     getModel: (_pid, mid) => (mid === model.id ? model : undefined),
@@ -29,7 +29,7 @@ function makeAdapter(eventsFactory) {
       return eventsFactory()
     },
   }
-  const adapter = new CodexAdapter(models, 'openai-codex', 'codex-oauth', { streamIdleTimeoutMs: 5000 })
+  const adapter = new CodexAdapter(models, 'openai-codex', 'codex-oauth', { streamIdleTimeoutMs: 5000, ...adapterOptions })
   return { adapter, getCaptured: () => captured }
 }
 
@@ -274,6 +274,13 @@ async function* tinyEvents() {
   const replayed = getCaptured().context.messages?.[1]
   check('T9 legacy catalog-id replay accepted', replayed?.provider === 'openai-codex' && replayed?.api === 'openai-codex-responses')
   check('T9 legacy text keeps signature', replayed?.content?.[0]?.textSignature === 'sig-legacy')
+}
+
+// ── T10: proxy mode forces the HTTP/SSE transport ──────────────────────────
+{
+  const { adapter, getCaptured } = makeAdapter(tinyEvents, { forceSse: true })
+  await collect(adapter, baseOptions())
+  check('T10 proxy mode forces SSE transport', getCaptured()?.opts?.transport === 'sse', String(getCaptured()?.opts?.transport))
 }
 
 if (failed > 0) {

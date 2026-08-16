@@ -20,6 +20,12 @@ importers:
       '@earendil-works/pi-ai':
         specifier: ^0.82.1
         version: 0.82.1(ws@8.21.3)(zod@4.4.3)
+      https-proxy-agent:
+        specifier: ^7.0.6
+        version: 7.0.6
+      node-fetch:
+        specifier: ^3.3.2
+        version: 3.3.2
     devDependencies:
       esbuild:
         specifier: ^0.28.2
